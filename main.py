@@ -13,7 +13,7 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any, get_type_hints
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter, MessageChain
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
@@ -436,10 +436,7 @@ class Main(Star):
             return
 
         remote_msg = self.cfg.remote_msg or "嗯...？怎么了？"
-        await self.context.send_message(
-            umo,
-            self.context.event_manager.message_chain_builder().message(remote_msg).build(),
-        )
+        await self.context.send_message(umo, MessageChain().message(remote_msg))
         self.store.set_cooldown(key, self.cfg.mc_st_cooldown)
         logger.info(f"[脑控大师] {key} 远程启动成功")
 
@@ -541,10 +538,7 @@ class Main(Star):
             ok, msg = await self.store.activate_remote(f"remote:{umo}", umo)
             if ok:
                 send_msg = custom_msg if custom_msg else (self.cfg.remote_msg or "嗯...？怎么了？")
-                await self.context.send_message(
-                    umo,
-                    self.context.event_manager.message_chain_builder().message(send_msg).build(),
-                )
+                await self.context.send_message(umo, MessageChain().message(send_msg))
             results.append({"umo": umo, "ok": ok, "msg": msg})
         return jsonify(results)
 
