@@ -413,10 +413,8 @@ class Main(Star):
 
         ok, result_msg = await self.store.activate(key, user_id)
         if ok:
-            mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
-            yield event.plain_result(
-                f"已进入【{mode_name}】模式，持续 {self.cfg.state_duration} 秒~"
-            )
+            logger.info(f"[脑控大师] {key} 已进入沉浸模式")
+            return
         else:
             yield event.plain_result(result_msg)
 
