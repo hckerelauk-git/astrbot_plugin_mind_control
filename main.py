@@ -167,7 +167,7 @@ class SessionStore:
             self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
             return True, "ok"
 
-    async def activate_remote(self, key: str, umo: str) -> tuple[bool, str]:
+    async def activate_remote(self, key: str, umo: str, sensitivity: int | None = None) -> tuple[bool, str]:
         async with self._lock:
             now = time.time()
             self._cleanup_one(key)
@@ -180,6 +180,7 @@ class SessionStore:
                 umo=umo,
                 waiting_start=now,
                 waiting_timeout=self.cfg.waiting_timeout,
+                custom_sensitivity=sensitivity,
             )
             return True, "ok"
 
@@ -463,9 +464,21 @@ class Main(Star):
 
     @filter.command("td_st")
     async def td_st(self, event: AstrMessageEvent):
+        """远程启动，可选指定敏感度 /td_st 或 /td_st 50"""
         if self.cfg.td_st_admin_only and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
+
+        msg = event.message_str.strip()
+        parts = msg.split()
+        sensitivity = None
+        if len(parts) > 1:
+            try:
+                sensitivity = int(parts[1])
+                sensitivity = max(0, min(100, sensitivity))
+            except ValueError:
+                yield event.plain_result("强度必须是 0-100 的整数喵~")
+                return
 
         key = self._get_key(event)
         umo = event.unified_msg_origin
@@ -475,13 +488,14 @@ class Main(Star):
             yield event.plain_result(f"还在冷却中，请等待 {cd} 秒")
             return
 
-        ok, result_msg = await self.store.activate_remote(key, umo)
+        ok, result_msg = await self.store.activate_remote(key, umo, sensitivity)
         if not ok:
             yield event.plain_result(result_msg)
             return
 
         self.store.set_cooldown(key, self.cfg.td_st_cooldown)
-        logger.info(f"[脑控大师] {key} 远程启动成功，等待用户消息触发 LLM")
+        eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
+        logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
 
     # ==================== 管理命令 ====================
 
