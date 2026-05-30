@@ -1,8 +1,9 @@
 ﻿from __future__ import annotations
 
 import asyncio
+import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .config import PluginConfig
 
@@ -17,10 +18,6 @@ class Session:
     """激活结束时间戳"""
     exit_ts: float | None = None
     """进入 afterglow 的时间戳"""
-    cooldown_end_user: float = 0.0
-    """用户冷却结束时间戳"""
-    cooldown_end_group: float = 0.0
-    """群冷却结束时间戳"""
     trigger_count: int = 0
     """触发次数"""
 
@@ -38,6 +35,7 @@ class SessionStore:
     def __init__(self, config: PluginConfig):
         self.cfg = config
         self._data: dict[str, Session] = {}
+        self._cooldowns: dict[str, tuple[float, float]] = {}  # key -> (user_end, group_end)
         self._lock = asyncio.Lock()
         self._stats = Stats()
 
@@ -62,12 +60,12 @@ class SessionStore:
         if not session.active or session.end is None:
             return self.cfg.sensitivity
 
-        now = time.time()
-        total = session.end - (session.end - self.cfg.state_duration)
+        total = self.cfg.state_duration
         if total <= 0:
             return self.cfg.sensitivity
 
-        elapsed = now - (session.end - self.cfg.state_duration)
+        start = session.end - total
+        elapsed = time.time() - start
         progress = max(0.0, min(1.0, elapsed / total))
         base = self.cfg.sensitivity
 
@@ -78,7 +76,6 @@ class SessionStore:
         elif self.cfg.curve == "decay":
             return int(base * (1.0 - 0.7 * progress))
         elif self.cfg.curve == "wave":
-            import math
             wave = (math.sin(progress * math.pi * 2) + 1) / 2
             return int(base * (0.5 + 0.5 * wave))
         return base
@@ -109,13 +106,19 @@ class SessionStore:
             if key in self._data and self._data[key].active:
                 return False, "已经在沉浸状态中"
 
+            prev_count = 0
+            if key in self._data and not self._data[key].active:
+                prev_count = self._data[key].trigger_count
+
             self._data[key] = Session(
                 active=True,
                 user_id=user_id,
                 end=now + self.cfg.state_duration,
-                cooldown_end_user=now + self.cfg.cooldown_user,
-                cooldown_end_group=now + self.cfg.cooldown_group,
-                trigger_count=1,
+                trigger_count=prev_count + 1,
+            )
+            self._cooldowns[key] = (
+                now + self.cfg.cooldown_user,
+                now + self.cfg.cooldown_group,
             )
             self._stats.total_triggers += 1
             return True, "ok"
@@ -143,18 +146,18 @@ class SessionStore:
     async def check_cooldown_user(self, key: str) -> int:
         """用户冷却剩余秒数"""
         async with self._lock:
-            s = self._data.get(key)
-            if not s:
+            cd = self._cooldowns.get(key)
+            if not cd:
                 return 0
-            return max(0, int(s.cooldown_end_user - time.time()))
+            return max(0, int(cd[0] - time.time()))
 
     async def check_cooldown_group(self, key: str) -> int:
         """群冷却剩余秒数"""
         async with self._lock:
-            s = self._data.get(key)
-            if not s:
+            cd = self._cooldowns.get(key)
+            if not cd:
                 return 0
-            return max(0, int(s.cooldown_end_group - time.time()))
+            return max(0, int(cd[1] - time.time()))
 
     async def get_remaining(self, key: str) -> int:
         """剩余时间秒数"""
@@ -174,24 +177,26 @@ class SessionStore:
     async def get_all_active(self) -> list[tuple[str, Session]]:
         """获取所有活跃会话"""
         async with self._lock:
-            now = time.time()
-            result = []
-            for key, s in list(self._data.items()):
+            expired_keys = []
+            for key in list(self._data.keys()):
                 self._cleanup_one(key)
-                if s.active:
-                    result.append((key, s))
-            return result
+                if key not in self._data:
+                    expired_keys.append(key)
+
+            return [(key, s) for key, s in self._data.items() if s.active]
 
     async def clear_all(self) -> int:
         """清除所有会话"""
         async with self._lock:
             count = len(self._data)
             self._data.clear()
+            self._cooldowns.clear()
             return count
 
     async def clear_one(self, key: str) -> bool:
         """清除指定会话"""
         async with self._lock:
+            self._cooldowns.pop(key, None)
             return self._data.pop(key, None) is not None
 
     def get_stats(self) -> Stats:

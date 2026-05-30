@@ -1,6 +1,4 @@
-﻿import time
-
-from astrbot.api import logger
+﻿from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
@@ -59,7 +57,6 @@ class Main(Star):
 
         msg = event.message_str.strip()
         key = self._get_key(event)
-        umo = event.unified_msg_origin
         user_id = event.get_sender_id()
 
         # 权限检查
@@ -77,7 +74,6 @@ class Main(Star):
             session = await self.store.get(key)
             if session and session.active:
                 await self.store.deactivate(key)
-                remaining = await self.store.get_remaining(key)
                 yield event.plain_result("已退出沉浸模式~")
             return
 
@@ -212,6 +208,7 @@ class Main(Star):
             return
 
         self.cfg.mode = mode_name
+        self.cfg.save_config()
         mode_display = MODE_NAMES[mode_name]
         yield event.plain_result(f"已切换到【{mode_display}】模式")
 
