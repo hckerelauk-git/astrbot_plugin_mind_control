@@ -25,7 +25,6 @@ class Session:
 @dataclass
 class Stats:
     total_triggers: int = 0
-    total_duration: float = 0.0
     active_sessions: int = 0
 
 
@@ -177,12 +176,8 @@ class SessionStore:
     async def get_all_active(self) -> list[tuple[str, Session]]:
         """获取所有活跃会话"""
         async with self._lock:
-            expired_keys = []
             for key in list(self._data.keys()):
                 self._cleanup_one(key)
-                if key not in self._data:
-                    expired_keys.append(key)
-
             return [(key, s) for key, s in self._data.items() if s.active]
 
     async def clear_all(self) -> int:

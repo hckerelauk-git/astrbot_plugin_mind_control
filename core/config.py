@@ -21,8 +21,6 @@ class ConfigNode:
         for key in self._schema():
             if key in data:
                 continue
-            if hasattr(self.__class__, key):
-                continue
             logger.warning(f"[config:{self.__class__.__name__}] 缺少字段: {key}")
 
     def __getattr__(self, key: str) -> Any:
