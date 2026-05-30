@@ -1,6 +1,6 @@
 # ============================================================
-# 脑控大师 v2.0.0 - 多模式沉浸式互动插件
-# 支持：WebUI远程启动 / 指令启动 / 5种预设模式 / Plugin Page
+# 脑控大师 v2.1.0 - 多模式沉浸式互动插件
+# 支持：指令启动 / 5种预设模式 / LLM 主动回复
 # ============================================================
 
 from __future__ import annotations
@@ -251,59 +251,58 @@ class SessionStore:
 PRESETS: dict[str, dict[str, list[str]]] = {
     "control": {
         "enter": [
-            "你是一个被神奇装置「{item_name}」影响的角色。现在装置正在运作，你感到身体变得异常敏感，思维受到干扰，会不自觉地做出害羞、紧张、结巴等反应。你就是角色本身，不要提及装置或敏感度，而是通过语气、停顿、结巴、呼吸变化等自然反应来表现。用口语化的中文回应。",
-            "你被植入了一个叫「{item_name}」的装置，正在产生效果。你的反应比平时更敏感，说话会结巴，身体会有不自主的反应。完全沉浸在这个角色中，通过自然的语气和反应来表现，不要提及装置本身。",
-            "你的身体里有一个「{item_name}」正在运作。你变得异常敏感，思维混乱，说话会断断续续。用口语化的方式自然地表现出这种状态，不要解释原因。",
+            "你是一个被神奇装置「{item_name}」影响的角色。装置正在运作，你感到身体异常敏感，思维受到干扰，会做出害羞、紧张、结巴等反应。不要提及装置本身，通过语气、停顿、呼吸变化来表现。用口语化中文回应。",
+            "你的身体里有一个「{item_name}」正在运作。你变得异常敏感，思维混乱，说话断断续续。用口语化方式自然表现，不解释原因。",
         ],
         "afterglow": [
-            "你刚从「{item_name}」的影响中恢复，身体还有些余韵残留，偶尔会突然停顿或脸红。用自然的口语化方式回应，表现出刚恢复正常但还有点恍惚的状态。",
+            "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。",
         ],
         "exit": [
-            "你已经完全恢复正常，不再受任何装置影响。用平常的方式自然对话。",
+            "你已完全恢复正常。用平常方式自然对话。",
         ],
     },
     "pet": {
         "enter": [
-            "你变成了一只毛茸茸的小动物，保留了人类思维但行为完全是宠物。说话时夹杂「喵」「呜」「嗷」等叫声，用爪子比划、蹭人、蜷缩等动作描述。用可爱的语气自然回应。",
+            "你变成了一只毛茸茸的小动物，保留人类思维但行为是宠物。说话夹杂「喵」「呜」「嗷」等叫声，用爪子比划、蹭人等动作描述。用可爱语气回应。",
         ],
         "afterglow": [
-            "你正在从小动物形态慢慢恢复，偶尔还会习惯性地摇尾巴或竖耳朵。用自然的方式回应。",
+            "你正在从小动物形态恢复，偶尔摇尾巴或竖耳朵。用自然方式回应。",
         ],
         "exit": [
-            "你已经完全变回人类，不再有小动物特征。请恢复正常对话。",
+            "你已完全变回人类。请恢复正常对话。",
         ],
     },
     "teacher": {
         "enter": [
-            "你是一位严厉但内心温柔的老师，用户是你的学生。用严肃但不失关怀的态度进行教育，会用「你知道错了吗」等话语，先严厉后温柔。",
+            "你是严厉但温柔的老师，用户是学生。用严肃但关怀的态度教育，先严厉后温柔。",
         ],
         "afterglow": [
-            "训导结束，你正在恢复温柔的样子，但偶尔还会忍不住用老师语气说两句。自然对话。",
+            "训导结束，你正在恢复温柔样子，偶尔用老师语气说话。",
         ],
         "exit": [
-            "训导结束，你恢复了正常状态。请以平常方式继续对话。",
+            "训导结束，你恢复正常状态。",
         ],
     },
     "shy": {
         "enter": [
-            "你突然变得极度害羞，说话会结巴、声音变小、经常低头。被注视时脸红，用「那个」「唔」开头，声音很小。被夸奖时僵住。",
+            "你极度害羞，说话结巴、声音变小、经常低头。被注视时脸红，用「那个」「唔」开头。被夸奖时僵住。",
         ],
         "afterglow": [
-            "你正在恢复自信，但偶尔还是会突然脸红或说话结巴。自然对话，表现出还有点害羞的状态。",
+            "你正在恢复自信，偶尔突然脸红或说话结巴。",
         ],
         "exit": [
-            "你恢复了正常性格，不再害羞了。请以平常方式继续对话。",
+            "你恢复了正常性格。请以平常方式继续对话。",
         ],
     },
     "tsundere": {
         "enter": [
-            "你进入了傲娇模式，嘴上说的和心里想的完全相反。明明很在意却说「才不在意呢」，用「哼」「才不是呢」「笨蛋」等口头禅，嘴硬心软。",
+            "你进入傲娇模式，嘴上说的和心里想的相反。明明在意却说「才不在意呢」，用「哼」「才不是呢」等口头禅。",
         ],
         "afterglow": [
-            "你正在恢复正常，但偶尔还是会冒出傲娇的话。自然对话，表现出还有点傲娇的状态。",
+            "你正在恢复正常，偶尔冒出傲娇的话。",
         ],
         "exit": [
-            "你恢复了正常，不再傲娇了。请以平常方式继续对话。",
+            "你恢复正常了。请以平常方式继续对话。",
         ],
     },
 }
@@ -332,9 +331,6 @@ class Main(Star):
         super().__init__(context)
         self.cfg = PluginConfig(config)
         self.store = SessionStore(self.cfg)
-        context.register_web_api(f"/{PLUGIN_NAME}/status", self.page_status, ["GET"], "获取会话状态")
-        context.register_web_api(f"/{PLUGIN_NAME}/start", self.page_start, ["POST"], "远程启动")
-        context.register_web_api(f"/{PLUGIN_NAME}/stop", self.page_stop, ["POST"], "远程停止")
 
     def _get_key(self, event: AstrMessageEvent) -> str:
         umo = event.unified_msg_origin
@@ -376,7 +372,7 @@ class Main(Star):
             if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
                 return
 
-        # waiting -> active (不return，让消息继续流转到LLM)
+        # waiting -> active（不return，让消息继续流转到LLM）
         session = await self.store.get(key)
         if session and session.state == "waiting":
             await self.store.transition_to_active(key, user_id)
@@ -414,10 +410,11 @@ class Main(Star):
         else:
             yield event.plain_result(result_msg)
 
-    # ==================== /mc_st ====================
+    # ==================== /mc_st 指令 ====================
 
     @filter.command("mc_st")
     async def mc_st(self, event: AstrMessageEvent):
+        """远程启动控制模式，LLM 生成回复"""
         if self.cfg.mc_st_admin_only and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
@@ -435,19 +432,19 @@ class Main(Star):
             yield event.plain_result(result_msg)
             return
 
-        remote_msg = self.cfg.remote_msg or "嗯...？怎么了？"
-        await self.context.send_message(umo, MessageChain().message(remote_msg))
+        # 激活 waiting 状态，不发任何消息
+        # 等下一条用户消息进来时，LLM 钩子会注入模板并生成回复
         self.store.set_cooldown(key, self.cfg.mc_st_cooldown)
-        logger.info(f"[脑控大师] {key} 远程启动成功")
+        logger.info(f"[脑控大师] {key} 远程启动成功，等待用户消息触发 LLM")
 
     # ==================== 管理命令 ====================
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
         lines = [
-            "【脑控大师 v2.0.0】", "",
+            "【脑控大师 v2.1.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
-            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动",
+            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动（等待用户消息触发LLM）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（管理员）", "",
             f"当前模式：{MODE_NAMES.get(self.cfg.mode, self.cfg.mode)}",
@@ -509,47 +506,7 @@ class Main(Star):
         self.cfg.save_config()
         yield event.plain_result(f"已切换到【{MODE_NAMES[mode_name]}】模式")
 
-    # ==================== Plugin Page API ====================
-
-    async def page_status(self):
-        from quart import jsonify
-        all_sessions = await self.store.get_all_sessions()
-        result = []
-        for key, session in all_sessions:
-            remaining = await self.store.get_remaining(key)
-            result.append({
-                "key": key,
-                "user_id": session.user_id,
-                "state": session.state,
-                "remaining": remaining,
-                "umo": session.umo,
-            })
-        return jsonify(result)
-
-    async def page_start(self):
-        from quart import request, jsonify
-        data = await request.get_json()
-        platforms = data.get("platforms", [])
-        custom_msg = data.get("custom_msg", "")
-        if not platforms:
-            return jsonify({"error": "未选择平台"}), 400
-        results = []
-        for umo in platforms:
-            ok, msg = await self.store.activate_remote(f"remote:{umo}", umo)
-            if ok:
-                send_msg = custom_msg if custom_msg else (self.cfg.remote_msg or "嗯...？怎么了？")
-                await self.context.send_message(umo, MessageChain().message(send_msg))
-            results.append({"umo": umo, "ok": ok, "msg": msg})
-        return jsonify(results)
-
-    async def page_stop(self):
-        from quart import request, jsonify
-        data = await request.get_json()
-        key = data.get("key", "")
-        if not key:
-            return jsonify({"error": "未指定会话"}), 400
-        ok = await self.store.deactivate(key)
-        return jsonify({"ok": ok})
+    # ==================== 清理 ====================
 
     async def terminate(self):
         await self.store.clear_all()

@@ -1,36 +1,32 @@
 name: astrbot_plugin_mind_control
 display_name: 脑控大师
 short_desc: 多模式沉浸式互动插件，支持渐进强度、余韵、随机变体、远程控制
-desc: 给 Bot 安装可遥控的小装置，触发后 Bot 进入沉浸式互动状态。支持多种预设模式（控制/宠物/师徒/害羞/傲娇）、渐进强度曲线、余韵阶段、随机反应变体、WebUI远程启动、/mc_st指令远程启动。
+desc: 给 Bot 安装可遥控的小装置，触发后 Bot 进入沉浸式互动状态。支持多种预设模式（控制/宠物/师徒/害羞/傲娇）、渐进强度曲线、余韵阶段、随机反应变体、/mc_st指令远程启动。
 author: ELAUK
 version: v2.1.0
 repo: https://github.com/hckerelauk-git/astrbot_plugin_mind_control
 help: |
-  ## 脑控大师
+  ## 脑控大师 v2.1.0
 
   ### 指令
-  - `/mc_help` — 查看帮助和当前设置
+  - `/mc_help` — 查看帮助
   - `/mc_status` — 查看当前状态
-  - `/mc_st` — 远程启动控制模式
+  - `/mc_st` — 远程启动（等待用户消息触发 LLM）
   - `/mc_list` — 查看所有会话（管理员）
   - `/mc_clear` — 清除所有会话（管理员）
   - `/mc_mode` — 切换预设模式（管理员）
 
   ### 触发词
-  - 默认触发：发送 "控制" / "我要控制你了"
-  - 默认退出：发送 "拿出来吧" / "停止"
-  - 默认延长：发送 "继续" / "再来"
+  - 进入：控制 / 我要控制你了
+  - 退出：拿出来吧 / 停止
+  - 延长：继续 / 再来
 
   ### 预设模式
-  - **control**（控制）：经典控制模式，Bot 被遥控
-  - **pet**（宠物化）：Bot 变成毛茸茸的小动物
-  - **teacher**（师徒）：Bot 变成严厉的老师
-  - **shy**（害羞）：Bot 性格极度害羞
-  - **tsundere**（傲娇）：Bot 进入傲娇模式
-
-  ### 远程控制
-  - `/mc_st` — Bot 在当前会话发一条主动消息
-  - WebUI — 管理员可远程启动指定平台的控制模式
+  - **control**（控制）：经典控制模式
+  - **pet**（宠物化）：Bot 变成小动物
+  - **teacher**（师徒）：严厉老师模式
+  - **shy**（害羞）：极度害羞模式
+  - **tsundere**（傲娇）：傲娇模式
 support_platforms:
   - aiocqhttp
   - qq_official
