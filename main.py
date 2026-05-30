@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 脑控大师 v2.1.0 - 多模式沉浸式互动插件
-# 支持：指令启动 / 5种预设模式 / LLM 主动回复
+# 支持：/td_st远程启动 / /控制指定强度 / 5种预设模式
 # ============================================================
 
 from __future__ import annotations
@@ -69,8 +69,8 @@ class PluginConfig(ConfigNode):
     admin_only_mode: bool
     waiting_timeout: int
     remote_msg: str
-    mc_st_admin_only: bool
-    mc_st_cooldown: int
+    td_st_admin_only: bool
+    td_st_cooldown: int
 
     def __init__(self, config: AstrBotConfig):
         super().__init__(config)
@@ -88,6 +88,7 @@ class Session:
     trigger_count: int = 0
     waiting_start: float | None = None
     waiting_timeout: float | None = None
+    custom_sensitivity: int | None = None
 
 
 class SessionStore:
@@ -116,15 +117,15 @@ class SessionStore:
                 self._data.pop(key, None)
 
     def _calc_sensitivity(self, session: Session) -> int:
+        base = session.custom_sensitivity if session.custom_sensitivity is not None else self.cfg.sensitivity
         if session.state != "active" or session.end is None:
-            return self.cfg.sensitivity
+            return base
         total = self.cfg.state_duration
         if total <= 0:
-            return self.cfg.sensitivity
+            return base
         start = session.end - total
         elapsed = time.time() - start
         progress = max(0.0, min(1.0, elapsed / total))
-        base = self.cfg.sensitivity
         if self.cfg.curve == "flat":
             return base
         elif self.cfg.curve == "ramp_up":
@@ -147,7 +148,7 @@ class SessionStore:
             s = self._data.get(key)
             return self._calc_sensitivity(s) if s else self.cfg.sensitivity
 
-    async def activate(self, key: str, user_id: str) -> tuple[bool, str]:
+    async def activate(self, key: str, user_id: str, sensitivity: int | None = None) -> tuple[bool, str]:
         async with self._lock:
             now = time.time()
             self._cleanup_one(key)
@@ -161,6 +162,7 @@ class SessionStore:
                 umo=existing.umo if existing else "",
                 end=now + self.cfg.state_duration,
                 trigger_count=prev_count + 1,
+                custom_sensitivity=sensitivity,
             )
             self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
             return True, "ok"
@@ -354,6 +356,53 @@ class Main(Star):
             return
         req.system_prompt += f"\n\n{template}"
 
+    # ==================== /控制 [强度] 指令 ====================
+
+    @filter.command("控制")
+    async def control_cmd(self, event: AstrMessageEvent):
+        """进入控制模式，可选指定强度"""
+        msg = event.message_str.strip()
+        parts = msg.split()
+        sensitivity = None
+        if len(parts) > 1:
+            try:
+                sensitivity = int(parts[1])
+                sensitivity = max(0, min(100, sensitivity))
+            except ValueError:
+                yield event.plain_result("强度必须是 0-100 的整数喵~")
+                return
+
+        key = self._get_key(event)
+        user_id = event.get_sender_id()
+
+        if self.cfg.admin_only_mode and not event.is_admin():
+            return
+
+        if not event.is_private_chat():
+            group_id = event.message_obj.group_id
+            if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
+                return
+
+        cd_user = await self.store.check_cooldown_user(key)
+        if cd_user > 0:
+            yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
+            return
+
+        if self.cfg.scope == "session":
+            cd_group = await self.store.check_cooldown_user(key)
+            if cd_group > 0:
+                yield event.plain_result(f"群聊冷却中，请等待 {cd_group} 秒")
+                return
+
+        ok, result_msg = await self.store.activate(key, user_id, sensitivity)
+        if ok:
+            mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
+            eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
+            logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
+            return
+        else:
+            yield event.plain_result(result_msg)
+
     # ==================== 消息处理 ====================
 
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -382,7 +431,7 @@ class Main(Star):
         if msg in self.cfg.exit_keywords:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
-                yield event.plain_result("已退出沉浸模式~")
+                # 不 yield，让消息继续流转到 LLM，LLM 会注入 afterglow 模板回复
             return
 
         # extend
@@ -394,7 +443,7 @@ class Main(Star):
                     yield event.plain_result(f"已延长~ 剩余 {remaining} 秒")
                 return
 
-        # enter
+        # enter（普通关键词触发，不指定强度）
         if msg not in self.cfg.enter_keywords:
             return
 
@@ -410,12 +459,11 @@ class Main(Star):
         else:
             yield event.plain_result(result_msg)
 
-    # ==================== /mc_st 指令 ====================
+    # ==================== /td_st 远程启动 ====================
 
-    @filter.command("mc_st")
-    async def mc_st(self, event: AstrMessageEvent):
-        """远程启动控制模式，LLM 生成回复"""
-        if self.cfg.mc_st_admin_only and not event.is_admin():
+    @filter.command("td_st")
+    async def td_st(self, event: AstrMessageEvent):
+        if self.cfg.td_st_admin_only and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
 
@@ -432,9 +480,7 @@ class Main(Star):
             yield event.plain_result(result_msg)
             return
 
-        # 激活 waiting 状态，不发任何消息
-        # 等下一条用户消息进来时，LLM 钩子会注入模板并生成回复
-        self.store.set_cooldown(key, self.cfg.mc_st_cooldown)
+        self.store.set_cooldown(key, self.cfg.td_st_cooldown)
         logger.info(f"[脑控大师] {key} 远程启动成功，等待用户消息触发 LLM")
 
     # ==================== 管理命令 ====================
@@ -444,9 +490,10 @@ class Main(Star):
         lines = [
             "【脑控大师 v2.1.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
-            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动（等待用户消息触发LLM）",
+            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /td_st - 远程启动",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（管理员）", "",
+            "强度控制：", "  /控制 或 /控制 50 → 进入控制模式（默认/指定敏感度）", "",
             f"当前模式：{MODE_NAMES.get(self.cfg.mode, self.cfg.mode)}",
             f"可用模式：" + " / ".join(MODE_NAMES.values()),
         ]
@@ -462,11 +509,13 @@ class Main(Star):
             yield event.plain_result("当前没有沉浸状态")
             return
         remaining = await self.store.get_remaining(key)
+        sensitivity = await self.store.get_sensitivity(key)
         mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
         state_names = {"waiting": "⏳等待", "active": "🔥激活", "afterglow": "💫余韵"}
         lines = [f"模式：{mode_name}", f"状态：{state_names.get(session.state, session.state)}"]
         if session.state == "active":
             lines.append(f"剩余：{remaining}秒")
+            lines.append(f"敏感度：{sensitivity}")
         elif session.state == "waiting":
             lines.append(f"等待剩余：{remaining}秒")
         lines.append(f"触发：{session.trigger_count}次")
@@ -483,7 +532,8 @@ class Main(Star):
         lines = [f"所有会话 ({len(all_sessions)} 个)："]
         for key, session in all_sessions:
             remaining = await self.store.get_remaining(key)
-            lines.append(f"  {session.user_id} | {state_names.get(session.state, '?')} | {remaining}秒")
+            sens = await self.store.get_sensitivity(key)
+            lines.append(f"  {session.user_id} | {state_names.get(session.state, '?')} | {remaining}秒 | 敏感度{sens}")
         yield event.plain_result("\n".join(lines))
 
     @filter.command("mc_clear")

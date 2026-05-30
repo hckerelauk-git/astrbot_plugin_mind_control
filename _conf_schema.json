@@ -17,7 +17,7 @@
         "type": "list",
         "description": "进入关键词",
         "hint": "用户发送对应关键词时触发沉浸模式",
-        "default": ["控制", "我要控制你了"]
+        "default": ["我要控制你了"]
     },
     "exit_keywords": {
         "type": "list",
@@ -34,7 +34,7 @@
     "state_duration": {
         "type": "int",
         "description": "持续时间（秒）",
-        "hint": "每次沉浸状态持续的时间，单位为秒",
+        "hint": "每次沉浸状态持续的时间",
         "slider": {"min": 10, "max": 600, "step": 1},
         "default": 180
     },
@@ -55,14 +55,14 @@
     "cooldown_group": {
         "type": "int",
         "description": "每群冷却（秒）",
-        "hint": "同一群聊连续触发的冷却时间（仅 scope=session 时生效）",
+        "hint": "同一群聊连续触发的冷却时间",
         "slider": {"min": 0, "max": 300, "step": 1},
         "default": 60
     },
     "sensitivity": {
         "type": "int",
         "description": "敏感度（0-100）",
-        "hint": "控制 Bot 反应的强烈程度",
+        "hint": "默认敏感度，/控制可覆盖",
         "slider": {"min": 0, "max": 100, "step": 1},
         "default": 50
     },
@@ -76,7 +76,7 @@
     "afterglow_enable": {
         "type": "bool",
         "description": "启用余韵阶段",
-        "hint": "退出后 Bot 会慢慢恢复，而不是立即结束",
+        "hint": "退出后 Bot 会慢慢恢复",
         "default": true
     },
     "afterglow_duration": {
@@ -95,7 +95,7 @@
     "group_whitelist": {
         "type": "list",
         "description": "群聊白名单",
-        "hint": "为空则不限制。使用 /mc_help 查看群 ID",
+        "hint": "为空则不限制",
         "default": []
     },
     "admin_only_mode": {
@@ -107,26 +107,26 @@
     "waiting_timeout": {
         "type": "int",
         "description": "等待超时（秒）",
-        "hint": "/mc_st 远程启动后，等待用户响应的超时时间",
+        "hint": "/td_st 远程启动后等待用户响应的超时时间",
         "slider": {"min": 30, "max": 600, "step": 10},
         "default": 300
     },
     "remote_msg": {
         "type": "string",
         "description": "远程启动提示消息",
-        "hint": "/mc_st 启动后显示的提示消息（可选，留空不提示）",
+        "hint": "/td_st 启动后显示的提示消息",
         "default": ""
     },
-    "mc_st_admin_only": {
+    "td_st_admin_only": {
         "type": "bool",
-        "description": "/mc_st 仅管理员可用",
-        "hint": "开启后只有管理员可以使用 /mc_st",
+        "description": "/td_st 仅管理员可用",
+        "hint": "开启后只有管理员可以使用 /td_st",
         "default": false
     },
-    "mc_st_cooldown": {
+    "td_st_cooldown": {
         "type": "int",
-        "description": "/mc_st 冷却时间（秒）",
-        "hint": "使用 /mc_st 后的冷却时间",
+        "description": "/td_st 冷却时间（秒）",
+        "hint": "使用 /td_st 后的冷却时间",
         "slider": {"min": 0, "max": 300, "step": 1},
         "default": 30
     }
