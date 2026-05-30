@@ -103,5 +103,31 @@
         "description": "仅管理员可用",
         "hint": "开启后只有管理员可以触发沉浸模式",
         "default": false
+    },
+    "waiting_timeout": {
+        "type": "int",
+        "description": "等待超时（秒）",
+        "hint": "WebUI远程启动后，等待用户响应的超时时间。超时自动取消。",
+        "slider": {"min": 30, "max": 600, "step": 10},
+        "default": 300
+    },
+    "remote_msg": {
+        "type": "string",
+        "description": "远程启动消息",
+        "hint": "使用 /mc_st 或 WebUI 远程启动时，Bot 发送的主动消息内容",
+        "default": "嗯...？怎么了？"
+    },
+    "mc_st_admin_only": {
+        "type": "bool",
+        "description": "/mc_st 仅管理员可用",
+        "hint": "开启后只有管理员可以使用 /mc_st 指令远程启动控制模式",
+        "default": false
+    },
+    "mc_st_cooldown": {
+        "type": "int",
+        "description": "/mc_st 冷却时间（秒）",
+        "hint": "使用 /mc_st 后的冷却时间",
+        "slider": {"min": 0, "max": 300, "step": 1},
+        "default": 30
     }
 }
