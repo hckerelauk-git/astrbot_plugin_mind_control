@@ -460,11 +460,11 @@ class Main(Star):
         else:
             yield event.plain_result(result_msg)
 
-    # ==================== /td_st 远程启动 ====================
+    # ==================== /tp_st 远程启动 ====================
 
-    @filter.command("td_st")
-    async def td_st(self, event: AstrMessageEvent):
-        """远程启动，可选指定敏感度 /td_st 或 /td_st 50"""
+    @filter.command("tp_st")
+    async def tp_st(self, event: AstrMessageEvent):
+        """远程启动，可选指定敏感度 /tp_st 或 /tp_st 50"""
         if self.cfg.td_st_admin_only and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
@@ -496,6 +496,7 @@ class Main(Star):
         self.store.set_cooldown(key, self.cfg.td_st_cooldown)
         eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
         logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
+        yield event.plain_result("已进入远程模式，等待用户消息触发 LLM~")
 
     # ==================== 管理命令 ====================
 
@@ -504,7 +505,7 @@ class Main(Star):
         lines = [
             "【脑控大师 v2.1.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
-            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /td_st - 远程启动",
+            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /tp_st - 远程启动（可指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（管理员）", "",
             "强度控制：", "  /控制 或 /控制 50 → 进入控制模式（默认/指定敏感度）", "",
