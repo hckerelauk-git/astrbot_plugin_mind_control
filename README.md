@@ -1,4 +1,4 @@
-﻿# 脑控大师 (astrbot_plugin_mind_control)
+# 脑控大师 (astrbot_plugin_mind_control)
 
 多模式沉浸式互动插件，支持渐进强度、余韵、随机变体。
 
