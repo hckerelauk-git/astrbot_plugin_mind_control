@@ -1,0 +1,154 @@
+# 脑控大师 v2.1.0 发布说明
+
+## 🎯 插件概述
+**脑控大师** (astrbot_plugin_mind_control) 是一个 AstrBot 多模式沉浸式互动插件。  
+支持关键词/指令唤醒 Bot，唤醒后 Bot 进入沉浸式角色扮演状态，通过 LLM 注入模板实现自然的角色扮演回复。
+
+---
+
+## 🚀 核心功能
+
+### 1. 多种预设模式
+| 模式 | 说明 |
+|------|------|
+| **control**（控制） | 经典控制模式，Bot 被遥控 |
+| **pet**（宠物化） | Bot 变成毛茸茸的小动物 |
+| **teacher**（师徒） | 严厉但温柔的老师 |
+| **shy**（害羞） | 极度害羞模式 |
+| **tsundere**（傲娇） | 傲娇模式 |
+
+### 2. 渐进强度曲线
+- **flat** - 固定敏感度
+- **ramp_up** - 逐步增强
+- **decay** - 逐渐消退
+- **wave** - 波动起伏
+
+### 3. 余韵阶段
+退出控制模式后，Bot 不会立即恢复正常，而是进入"余韵"状态，偶尔还会表现出角色特征，自然过渡。
+
+### 4. 远程控制
+- `/tp_st` - 远程启动控制模式（管理员可选）
+- `/tp_st 50` - 远程启动并指定敏感度
+- 支持 `waiting` 状态：启动后等待用户说话才开始计时
+
+### 5. 指令控制
+- `/控制` - 进入控制模式（默认敏感度）
+- `/控制 50` - 进入控制模式（指定敏感度 0-100）
+- 触发词：`我要控制你了`、`拿出来吧`、`继续` 等
+
+---
+
+## 📋 指令列表
+
+| 指令 | 说明 |
+|------|------|
+| `/控制` | 进入控制模式（默认敏感度） |
+| `/控制 50` | 进入控制模式（指定敏感度） |
+| `/tp_st` | 远程启动（默认敏感度） |
+| `/tp_st 50` | 远程启动（指定敏感度） |
+| `/mc_help` | 查看帮助 |
+| `/mc_status` | 查看当前状态 |
+| `/mc_list` | 查看所有会话（管理员） |
+| `/mc_clear` | 清除所有会话（管理员） |
+| `/mc_mode` | 切换预设模式（管理员） |
+
+### 触发词（默认）
+- **进入**：`我要控制你了`
+- **退出**：`拿出来吧` / `停止`
+- **延长**：`继续` / `再来`
+
+---
+
+## ⚙️ 配置项
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| mode | string | control | 预设模式 |
+| scope | string | user | 作用范围（user/session） |
+| enter_keywords | list | ["我要控制你了"] | 进入关键词 |
+| exit_keywords | list | ["拿出来吧", "停止"] | 退出关键词 |
+| extend_keywords | list | ["继续", "再来"] | 延长关键词 |
+| state_duration | int | 180 | 持续时间（秒） |
+| extend_duration | int | 60 | 延长时间（秒） |
+| cooldown_user | int | 30 | 每用户冷却（秒） |
+| cooldown_group | int | 60 | 每群冷却（秒） |
+| sensitivity | int | 50 | 默认敏感度（0-100） |
+| curve | string | flat | 强度曲线 |
+| afterglow_enable | bool | true | 启用余韵阶段 |
+| afterglow_duration | int | 30 | 余韵持续时间（秒） |
+| item_name | string | 特殊装置 | 装置名称 |
+| group_whitelist | list | [] | 群聊白名单 |
+| admin_only_mode | bool | false | 仅管理员可用 |
+| waiting_timeout | int | 300 | 远程启动等待超时（秒） |
+| td_st_admin_only | bool | false | /tp_st 仅管理员可用 |
+| td_st_cooldown | int | 30 | /tp_st 冷却时间（秒） |
+
+---
+
+## 🔧 技术特性
+
+### Session 状态机
+```
+waiting → active → afterglow → 移除
+```
+- **waiting**：远程启动后等待用户说话
+- **active**：控制模式激活中，LLM 注入模板
+- **afterglow**：退出后的余韵状态
+
+### 渐进强度计算
+根据 `curve` 配置和已过时间百分比，动态调整敏感度：
+- `flat`：固定值
+- `ramp_up`：`base * (0.3 + 0.7 * progress)`
+- `decay`：`base * (1.0 - 0.7 * progress)`
+- `wave`：`base * (0.5 + 0.5 * sin(progress * 2π))`
+
+### 线程安全
+所有 Session 操作使用 `asyncio.Lock()` 保护，支持并发访问。
+
+---
+
+## 📦 安装方式
+
+### 方式一：手动安装
+```bash
+cd AstrBot/data/plugins
+git clone https://github.com/hckerelauk-git/astrbot_plugin_mind_control
+```
+
+### 方式二：压缩包安装
+下载 `astrbot_plugin_mind_control.zip`，解压到 `data/plugins/` 目录。
+
+---
+
+## 📁 文件结构
+```
+astrbot_plugin_mind_control/
+├── main.py           (21.58 KB) - 核心逻辑
+├── metadata.yaml     (1.47 KB)  - 插件元信息
+├── _conf_schema.json (4.3 KB)   - 配置定义
+├── README.md         (4.27 KB)  - 使用文档
+└── .gitignore
+```
+
+---
+
+## 🐛 已修复问题
+- 修复 `Context` 对象无 `event_manager` 属性错误，改用 `MessageChain` API
+- 修复退出时发送纯文本而非 LLM 回复的问题
+- 修复 `/tp_st` 命令未正确拦截消息导致 LLM 收到原始文本
+- 移除 WebUI Plugin Page（简化架构）
+- 修复所有文件 UTF-8 BOM 编码问题
+
+---
+
+## 📝 作者
+**ELAUK** (hckerelauk-git)
+
+## 🔗 链接
+- GitHub：https://github.com/hckerelauk-git/astrbot_plugin_mind_control
+- 插件市场：https://plugins.astrbot.app
+
+---
+
+## 📄 许可证
+AGPL-3.0
