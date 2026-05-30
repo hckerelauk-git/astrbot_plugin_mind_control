@@ -269,6 +269,9 @@ class SessionStore:
             self._cooldowns.pop(key, None)
             return self._data.pop(key, None) is not None
 
+    def set_cooldown(self, key: str, seconds: int) -> None:
+        self._cooldowns[key] = (time.time() + seconds, time.time() + seconds)
+
 
 # ======================== 预设模板模块 ========================
 
@@ -411,11 +414,11 @@ class Main(Star):
             if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
                 return
 
-        # waiting -> active
+        # waiting -> active (不return，让消息继续流转到LLM)
         session = await self.store.get(key)
         if session and session.state == "waiting":
             await self.store.transition_to_active(key, user_id)
-            return
+            session = await self.store.get(key)
 
         # exit
         if msg in self.cfg.exit_keywords:
@@ -466,9 +469,9 @@ class Main(Star):
         key = self._get_key(event)
         umo = event.unified_msg_origin
 
-        cd_user = await self.store.check_cooldown_user(key)
-        if cd_user > 0:
-            yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
+        cd = await self.store.check_cooldown_user(key)
+        if cd > 0:
+            yield event.plain_result(f"还在冷却中，请等待 {cd} 秒")
             return
 
         ok, result_msg = await self.store.activate_remote(key, umo)
@@ -481,6 +484,7 @@ class Main(Star):
             umo,
             self.context.event_manager.message_chain_builder().message(remote_msg).build(),
         )
+        self.store.set_cooldown(key, self.cfg.mc_st_cooldown)
         logger.info(f"[脑控大师] {key} 远程启动成功")
 
     # ==================== 管理命令 ====================
@@ -599,11 +603,23 @@ class Main(Star):
         from quart import request, jsonify
         data = await request.get_json()
         platforms = data.get("platforms", [])
+        custom_msg = data.get("custom_msg", "")
         if not platforms:
             return jsonify({"error": "未选择平台"}), 400
         results = []
         for umo in platforms:
             ok, msg = await self.store.activate_remote(f"remote:{umo}", umo)
+            if ok and custom_msg:
+                await self.context.send_message(
+                    umo,
+                    self.context.event_manager.message_chain_builder().message(custom_msg).build(),
+                )
+            elif ok:
+                remote_msg = self.cfg.remote_msg or "嗯...？怎么了？"
+                await self.context.send_message(
+                    umo,
+                    self.context.event_manager.message_chain_builder().message(remote_msg).build(),
+                )
             results.append({"umo": umo, "ok": ok, "msg": msg})
         return jsonify(results)
 
