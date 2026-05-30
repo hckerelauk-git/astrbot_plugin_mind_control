@@ -364,6 +364,10 @@ class Main(Star):
         super().__init__(context)
         self.cfg = PluginConfig(config)
         self.store = SessionStore(self.cfg)
+        PLUGIN_NAME = "astrbot_plugin_mind_control"
+        context.register_web_api(f"/{PLUGIN_NAME}/status", self.page_status, ["GET"], "获取会话状态")
+        context.register_web_api(f"/{PLUGIN_NAME}/start", self.page_start, ["POST"], "远程启动")
+        context.register_web_api(f"/{PLUGIN_NAME}/stop", self.page_stop, ["POST"], "远程停止")
 
     def _get_key(self, event: AstrMessageEvent) -> str:
         umo = event.unified_msg_origin
