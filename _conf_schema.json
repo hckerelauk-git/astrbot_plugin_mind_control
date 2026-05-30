@@ -1,0 +1,107 @@
+﻿{
+    "mode": {
+        "type": "string",
+        "description": "预设模式",
+        "hint": "选择沉浸式互动的预设场景，不同模式有不同的反应模板",
+        "options": ["control", "pet", "teacher", "shy", "tsundere"],
+        "default": "control"
+    },
+    "scope": {
+        "type": "string",
+        "description": "状态作用范围",
+        "hint": "user = 仅触发者受影响，session = 全群所有人消息都会被影响",
+        "options": ["user", "session"],
+        "default": "user"
+    },
+    "enter_keywords": {
+        "type": "list",
+        "description": "进入关键词",
+        "hint": "用户发送对应关键词时触发沉浸模式",
+        "default": ["控制", "我要控制你了"]
+    },
+    "exit_keywords": {
+        "type": "list",
+        "description": "退出关键词",
+        "hint": "用户发送对应关键词时退出沉浸模式",
+        "default": ["拿出来吧", "停止"]
+    },
+    "extend_keywords": {
+        "type": "list",
+        "description": "延长关键词",
+        "hint": "在沉浸状态中发送对应关键词可延长持续时间",
+        "default": ["继续", "再来", "more"]
+    },
+    "state_duration": {
+        "type": "int",
+        "description": "持续时间（秒）",
+        "hint": "每次沉浸状态持续的时间，单位为秒。默认 3 分钟（180秒）",
+        "slider": {"min": 10, "max": 600, "step": 1},
+        "default": 180
+    },
+    "extend_duration": {
+        "type": "int",
+        "description": "每次延长时间（秒）",
+        "hint": "发送延长关键词时增加的时间",
+        "slider": {"min": 10, "max": 300, "step": 1},
+        "default": 60
+    },
+    "cooldown_user": {
+        "type": "int",
+        "description": "每用户冷却（秒）",
+        "hint": "同一用户连续触发的冷却时间",
+        "slider": {"min": 0, "max": 120, "step": 1},
+        "default": 30
+    },
+    "cooldown_group": {
+        "type": "int",
+        "description": "每群冷却（秒）",
+        "hint": "同一群聊连续触发的冷却时间（仅 scope=session 时生效）",
+        "slider": {"min": 0, "max": 300, "step": 1},
+        "default": 60
+    },
+    "sensitivity": {
+        "type": "int",
+        "description": "敏感度（0-100）",
+        "hint": "控制 Bot 反应的强烈程度，数值越高反应越强烈",
+        "slider": {"min": 0, "max": 100, "step": 1},
+        "default": 50
+    },
+    "curve": {
+        "type": "string",
+        "description": "强度曲线",
+        "hint": "flat = 固定，ramp_up = 逐步增强，decay = 逐渐消退，wave = 波动起伏",
+        "options": ["flat", "ramp_up", "decay", "wave"],
+        "default": "flat"
+    },
+    "afterglow_enable": {
+        "type": "bool",
+        "description": "启用余韵阶段",
+        "hint": "退出后 Bot 会慢慢恢复，而不是立即结束",
+        "default": true
+    },
+    "afterglow_duration": {
+        "type": "int",
+        "description": "余韵持续时间（秒）",
+        "hint": "余韵阶段的持续时间",
+        "slider": {"min": 0, "max": 120, "step": 1},
+        "default": 30
+    },
+    "item_name": {
+        "type": "string",
+        "description": "装置名称",
+        "hint": "在提示词中显示的装置名称，可自定义",
+        "default": "特殊装置"
+    },
+    "group_whitelist": {
+        "type": "list",
+        "description": "群聊白名单",
+        "hint": "为空则不限制，仅白名单内的群聊可触发。使用 /mc_help 查看当前群 ID",
+        "default": []
+    },
+    "admin_only_mode": {
+        "type": "bool",
+        "description": "仅管理员可用",
+        "hint": "开启后只有管理员可以触发沉浸模式",
+        "default": false
+    }
+}
