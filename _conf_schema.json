@@ -133,19 +133,19 @@
     "custom_enter_prompt": {
         "type": "text",
         "description": "自定义进入沉浸模式提示词",
-        "hint": "留空则使用内置预设模板。支持 {item_name} 占位符。此提示词会追加到每轮对话中。",
+        "hint": "清空此字段则使用内置预设（5种模式随机选择）。填写自定义内容后将固定使用此提示词。支持 {item_name} 占位符。示例：你是一个被神奇装置「{item_name}」影响的角色，会做出害羞、紧张等反应。",
         "default": ""
     },
     "custom_afterglow_prompt": {
         "type": "text",
         "description": "自定义余韵阶段提示词",
-        "hint": "留空则使用内置预设模板。支持 {item_name} 占位符。",
+        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。示例：你刚从「{item_name}」的影响中恢复，身体还有余韵。",
         "default": ""
     },
     "custom_exit_prompt": {
         "type": "text",
         "description": "自定义退出沉浸模式提示词",
-        "hint": "留空则使用内置预设模板。支持 {item_name} 占位符。",
+        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。示例：你已完全恢复正常，用平常方式自然对话。",
         "default": ""
     },
     "custom_presets": {
