@@ -1,9 +1,9 @@
 name: astrbot_plugin_mind_control
 display_name: 脑控大师
-short_desc: 多模式沉浸式互动插件，支持渐进强度、余韵、随机变体、远程控制
-desc: 给 Bot 安装可遥控的小装置，触发后 Bot 进入沉浸式互动状态。支持多种预设模式（控制/宠物/师徒/害羞/傲娇）、渐进强度曲线、余韵阶段、随机反应变体、/mc_st指令远程启动。
+short_desc: 多模式沉浸式互动插件，支持渐进强度、余韵、随机变体、远程控制、自定义提示词
+desc: 给 Bot 安装可遥控的小装置，触发后 Bot 进入沉浸式互动状态。支持多种预设模式（控制/宠物/师徒/害羞/傲娇）、渐进强度曲线、余韵阶段、随机反应变体、/tp_st指令远程启动、自定义提示词和自定义预设。
 author: ELAUK
-version: v2.1.0
+version: v2.2.0
 repo: https://github.com/hckerelauk-git/astrbot_plugin_mind_control
 help: |
   ## 脑控大师 v2.2.0
@@ -32,18 +32,6 @@ help: |
   ### 自定义功能
   - **自定义提示词**：在插件配置中设置"自定义进入/余韵/退出提示词"
   - **自定义预设**：在插件配置中添加自定义预设列表，创建后用 `/mc_mode 预设名` 切换
-
-  ### 触发词
-  - 进入：控制 / 我要控制你了
-  - 退出：拿出来吧 / 停止
-  - 延长：继续 / 再来
-
-  ### 预设模式
-  - **control**（控制）：经典控制模式
-  - **pet**（宠物化）：Bot 变成小动物
-  - **teacher**（师徒）：严厉老师模式
-  - **shy**（害羞）：极度害羞模式
-  - **tsundere**（傲娇）：傲娇模式
 support_platforms:
   - aiocqhttp
   - qq_official
