@@ -33,6 +33,7 @@ class ConfigNode:
 
     def __init__(self, data: MutableMapping[str, Any]):
         object.__setattr__(self, "_data", data)
+        object.__setattr__(self, "_raw_config", data)
         for key in self._schema():
             if key in data:
                 continue
@@ -48,6 +49,11 @@ class ConfigNode:
             self._data[key] = value
             return
         object.__setattr__(self, key, value)
+
+    def save_config(self) -> None:
+        """保存配置到文件"""
+        if hasattr(self._raw_config, "save_config"):
+            self._raw_config.save_config()
 
 
 class PluginConfig(ConfigNode):
@@ -220,6 +226,11 @@ class SessionStore:
             cd = self._cooldowns.get(key)
             return max(0, int(cd[0] - time.time())) if cd else 0
 
+    async def check_cooldown_group(self, key: str) -> int:
+        async with self._lock:
+            cd = self._cooldowns.get(key)
+            return max(0, int(cd[1] - time.time())) if cd else 0
+
     async def get_remaining(self, key: str) -> int:
         async with self._lock:
             s = self._data.get(key)
@@ -390,7 +401,7 @@ class Main(Star):
             return
 
         if self.cfg.scope == "session":
-            cd_group = await self.store.check_cooldown_user(key)
+            cd_group = await self.store.check_cooldown_group(key)
             if cd_group > 0:
                 yield event.plain_result(f"群聊冷却中，请等待 {cd_group} 秒")
                 return
