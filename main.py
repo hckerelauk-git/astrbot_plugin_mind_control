@@ -1,6 +1,6 @@
 ﻿# ============================================================
-# 脑控大师 v2.2.0 - 多模式沉浸式互动插件
-# 支持：/tp_st远程启动 / /控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设
+# 脑控大师 v2.3.0 - 多模式沉浸式互动插件
+# 支持：/tp_st远程启动 / /控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设 / 进入退出消息
 # ============================================================
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
 from astrbot.api import logger
-from astrbot.core.agent.message import TextPart
 
 PLUGIN_NAME = "astrbot_plugin_mind_control"
 
@@ -82,6 +81,10 @@ class PluginConfig(ConfigNode):
     custom_afterglow_prompt: str
     custom_exit_prompt: str
     custom_presets: list[dict]
+    enter_msg_enable: bool
+    enter_msg_text: str
+    exit_msg_enable: bool
+    exit_msg_text: str
 
     def __init__(self, config: AstrBotConfig):
         super().__init__(config)
@@ -413,9 +416,7 @@ class Main(Star):
         else:
             return
         logger.info(f"[脑控大师] {key} 注入提示词，模式={self.cfg.mode}，状态={session.state}")
-        req.extra_user_content_parts.append(
-            TextPart(text=f"[脑控大师沉浸模式指令] {template}")
-        )
+        req.system_prompt += f"\n\n[脑控大师沉浸模式指令]\n{template}"
 
     # ==================== /控制 [强度] 指令 ====================
 
@@ -457,10 +458,13 @@ class Main(Star):
 
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
-            mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
             eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
-            logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
-            yield event.plain_result(f"已进入【{mode_name}】模式，敏感度={eff}")
+            mode_display = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
+            logger.info(f"[脑控大师] {key} 进入沉浸模式，模式={self.cfg.mode}，敏感度={eff}")
+            if self.cfg.enter_msg_enable and self.cfg.enter_msg_text:
+                yield event.plain_result(self.cfg.enter_msg_text)
+            else:
+                yield event.plain_result(f"已进入【{mode_display}】模式，敏感度={eff}")
         else:
             yield event.plain_result(result_msg)
 
@@ -492,6 +496,10 @@ class Main(Star):
         if msg in self.cfg.exit_keywords:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
+                if self.cfg.exit_msg_enable:
+                    exit_text = self.cfg.exit_msg_text if self.cfg.exit_msg_text else "已退出沉浸模式~"
+                    yield event.plain_result(exit_text)
+                    return
                 # 不 yield，让消息继续流转到 LLM，LLM 会注入 afterglow 模板回复
             return
 
@@ -516,6 +524,9 @@ class Main(Star):
         ok, result_msg = await self.store.activate(key, user_id)
         if ok:
             logger.info(f"[脑控大师] {key} 已进入沉浸模式")
+            if self.cfg.enter_msg_enable:
+                enter_text = self.cfg.enter_msg_text if self.cfg.enter_msg_text else "已进入沉浸模式~"
+                yield event.plain_result(enter_text)
             return
         else:
             yield event.plain_result(result_msg)
@@ -566,16 +577,16 @@ class Main(Star):
         custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
         all_modes = list(MODE_NAMES.values()) + custom_names
         lines = [
-            "【脑控大师 v2.2.0】", "",
+            "【脑控大师 v2.3.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
             "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /tp_st - 远程启动（可指定敏感度）",
-            "  /控制 或 /控制 50 - 进入控制模式（默认/指定敏感度）",
+            "  /控制 或 /控制 50 - 进入沉浸模式（使用当前模式，可指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（支持中文，管理员）", "",
             f"当前模式：{MODE_NAMES.get(self.cfg.mode, self.cfg.mode)}",
             f"可用模式：" + " / ".join(all_modes),
             "",
-            "自定义：可在插件配置中设置自定义提示词和自定义预设",
+            "自定义：可在插件配置中设置自定义提示词、自定义预设、进入/退出消息",
         ]
         if event.message_obj.group_id:
             lines.append(f"\n当前群 ID：{event.message_obj.group_id}")
