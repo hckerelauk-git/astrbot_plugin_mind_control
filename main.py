@@ -1,6 +1,6 @@
 ﻿# ============================================================
-# 脑控大师 v2.1.0 - 多模式沉浸式互动插件
-# 支持：/td_st远程启动 / /控制指定强度 / 5种预设模式
+# 脑控大师 v2.2.0 - 多模式沉浸式互动插件
+# 支持：/tp_st远程启动 / /控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设
 # ============================================================
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
 from astrbot.api import logger
+from astrbot.core.agent.message import TextPart
 
 PLUGIN_NAME = "astrbot_plugin_mind_control"
 
@@ -75,8 +76,12 @@ class PluginConfig(ConfigNode):
     admin_only_mode: bool
     waiting_timeout: int
     remote_msg: str
-    td_st_admin_only: bool
-    td_st_cooldown: int
+    tp_st_admin_only: bool
+    tp_st_cooldown: int
+    custom_enter_prompt: str
+    custom_afterglow_prompt: str
+    custom_exit_prompt: str
+    custom_presets: list[dict]
 
     def __init__(self, config: AstrBotConfig):
         super().__init__(config)
@@ -322,11 +327,36 @@ PRESETS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def get_templates(mode: str, item_name: str, sensitivity: int) -> dict[str, str]:
+def get_templates(mode: str, item_name: str, sensitivity: int, cfg: PluginConfig | None = None) -> dict[str, str]:
+    """获取提示词模板，支持自定义提示词和自定义预设"""
+    # 1. 检查是否是自定义预设
+    custom_presets = cfg.custom_presets if cfg and hasattr(cfg, 'custom_presets') and cfg.custom_presets else []
+    for cp in custom_presets:
+        if isinstance(cp, dict) and cp.get("name") == mode:
+            enter = cp.get("enter", "").replace("{item_name}", item_name)
+            afterglow = cp.get("afterglow", "").replace("{item_name}", item_name)
+            exit_t = cp.get("exit", "").replace("{item_name}", item_name)
+            return {
+                "enter": enter or PRESETS["control"]["enter"][0],
+                "afterglow": afterglow or PRESETS["control"]["afterglow"][0],
+                "exit": exit_t or PRESETS["control"]["exit"][0],
+            }
+
+    # 2. 使用内置预设
     preset = PRESETS.get(mode, PRESETS["control"])
     enter = random.choice(preset.get("enter", PRESETS["control"]["enter"])).replace("{item_name}", item_name)
     afterglow = random.choice(preset.get("afterglow", PRESETS["control"]["afterglow"])).replace("{item_name}", item_name)
     exit_t = random.choice(preset.get("exit", PRESETS["control"]["exit"])).replace("{item_name}", item_name)
+
+    # 3. 如果用户配置了自定义提示词，优先使用
+    if cfg:
+        if cfg.custom_enter_prompt:
+            enter = cfg.custom_enter_prompt.replace("{item_name}", item_name)
+        if cfg.custom_afterglow_prompt:
+            afterglow = cfg.custom_afterglow_prompt.replace("{item_name}", item_name)
+        if cfg.custom_exit_prompt:
+            exit_t = cfg.custom_exit_prompt.replace("{item_name}", item_name)
+
     return {"enter": enter, "afterglow": afterglow, "exit": exit_t}
 
 
@@ -334,6 +364,22 @@ MODE_NAMES: dict[str, str] = {
     "control": "控制", "pet": "宠物化", "teacher": "师徒",
     "shy": "害羞", "tsundere": "傲娇",
 }
+
+# 中文/别名 → 英文模式名 的反向映射
+MODE_ALIASES: dict[str, str] = {
+    "控制": "control", "宠物化": "pet", "师徒": "teacher",
+    "害羞": "shy", "傲娇": "tsundere",
+}
+
+
+def resolve_mode_name(name: str) -> str | None:
+    """将用户输入的模式名（中文/英文/别名）解析为标准英文模式名"""
+    name_lower = name.strip().lower()
+    if name_lower in MODE_NAMES:
+        return name_lower
+    if name in MODE_ALIASES:
+        return MODE_ALIASES[name]
+    return None
 
 
 # ======================== 插件主类 ========================
@@ -359,14 +405,17 @@ class Main(Star):
         if not session:
             return
         sensitivity = await self.store.get_sensitivity(key)
-        templates = get_templates(self.cfg.mode, self.cfg.item_name, sensitivity)
+        templates = get_templates(self.cfg.mode, self.cfg.item_name, sensitivity, self.cfg)
         if session.state == "active":
             template = templates["enter"]
         elif session.state == "afterglow":
             template = templates["afterglow"]
         else:
             return
-        req.system_prompt += f"\n\n{template}"
+        logger.info(f"[脑控大师] {key} 注入提示词，模式={self.cfg.mode}，状态={session.state}")
+        req.extra_user_content_parts.append(
+            TextPart(text=f"[脑控大师沉浸模式指令] {template}")
+        )
 
     # ==================== /控制 [强度] 指令 ====================
 
@@ -411,7 +460,7 @@ class Main(Star):
             mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
             eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
             logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
-            return
+            yield event.plain_result(f"已进入【{mode_name}】模式，敏感度={eff}")
         else:
             yield event.plain_result(result_msg)
 
@@ -476,7 +525,7 @@ class Main(Star):
     @filter.command("tp_st")
     async def tp_st(self, event: AstrMessageEvent):
         """远程启动，可选指定敏感度 /tp_st 或 /tp_st 50"""
-        if self.cfg.td_st_admin_only and not event.is_admin():
+        if self.cfg.tp_st_admin_only and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
 
@@ -504,24 +553,29 @@ class Main(Star):
             yield event.plain_result(result_msg)
             return
 
-        self.store.set_cooldown(key, self.cfg.td_st_cooldown)
+        self.store.set_cooldown(key, self.cfg.tp_st_cooldown)
         eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
         logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
-        yield event.plain_result("已进入远程模式，等待用户消息触发 LLM~")
+        remote_msg = self.cfg.remote_msg if self.cfg.remote_msg else "已进入远程模式，等待用户消息触发 LLM~"
+        yield event.plain_result(remote_msg)
 
     # ==================== 管理命令 ====================
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
+        custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
+        all_modes = list(MODE_NAMES.values()) + custom_names
         lines = [
-            "【脑控大师 v2.1.0】", "",
+            "【脑控大师 v2.2.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
             "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /tp_st - 远程启动（可指定敏感度）",
+            "  /控制 或 /控制 50 - 进入控制模式（默认/指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
-            "  /mc_mode [模式名] - 切换模式（管理员）", "",
-            "强度控制：", "  /控制 或 /控制 50 → 进入控制模式（默认/指定敏感度）", "",
+            "  /mc_mode [模式名] - 切换模式（支持中文，管理员）", "",
             f"当前模式：{MODE_NAMES.get(self.cfg.mode, self.cfg.mode)}",
-            f"可用模式：" + " / ".join(MODE_NAMES.values()),
+            f"可用模式：" + " / ".join(all_modes),
+            "",
+            "自定义：可在插件配置中设置自定义提示词和自定义预设",
         ]
         if event.message_obj.group_id:
             lines.append(f"\n当前群 ID：{event.message_obj.group_id}")
@@ -573,14 +627,29 @@ class Main(Star):
     async def mc_mode(self, event: AstrMessageEvent, mode_name: str = ""):
         if not mode_name:
             current = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
-            yield event.plain_result(f"当前：{current}\n可用：{' / '.join(MODE_NAMES.values())}")
+            custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
+            all_modes = list(MODE_NAMES.values()) + custom_names
+            yield event.plain_result(f"当前：{current}\n可用：{' / '.join(all_modes)}")
             return
-        if mode_name not in MODE_NAMES:
-            yield event.plain_result(f"未知模式，可用：{' / '.join(MODE_NAMES.keys())}")
+
+        resolved = resolve_mode_name(mode_name)
+        if not resolved:
+            # 检查自定义预设
+            custom_presets = self.cfg.custom_presets or []
+            for cp in custom_presets:
+                if isinstance(cp, dict) and cp.get("name") == mode_name:
+                    resolved = mode_name
+                    break
+
+        if not resolved:
+            all_modes = list(MODE_NAMES.keys()) + [cp.get("name", "") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
+            yield event.plain_result(f"未知模式，可用：{' / '.join(all_modes)}")
             return
-        self.cfg.mode = mode_name
+
+        self.cfg.mode = resolved
         self.cfg.save_config()
-        yield event.plain_result(f"已切换到【{MODE_NAMES[mode_name]}】模式")
+        display_name = MODE_NAMES.get(resolved, resolved)
+        yield event.plain_result(f"已切换到【{display_name}】模式")
 
     # ==================== 清理 ====================
 

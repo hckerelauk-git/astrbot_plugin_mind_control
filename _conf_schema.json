@@ -107,27 +107,51 @@
     "waiting_timeout": {
         "type": "int",
         "description": "等待超时（秒）",
-        "hint": "/td_st 远程启动后等待用户响应的超时时间",
+        "hint": "/tp_st 远程启动后等待用户响应的超时时间",
         "slider": {"min": 30, "max": 600, "step": 10},
         "default": 300
     },
     "remote_msg": {
         "type": "string",
         "description": "远程启动提示消息",
-        "hint": "/td_st 启动后显示的提示消息",
+        "hint": "/tp_st 启动后显示的提示消息，留空使用默认",
         "default": ""
     },
-    "td_st_admin_only": {
+    "tp_st_admin_only": {
         "type": "bool",
-        "description": "/td_st 仅管理员可用",
-        "hint": "开启后只有管理员可以使用 /td_st",
+        "description": "/tp_st 仅管理员可用",
+        "hint": "开启后只有管理员可以使用 /tp_st",
         "default": false
     },
-    "td_st_cooldown": {
+    "tp_st_cooldown": {
         "type": "int",
-        "description": "/td_st 冷却时间（秒）",
-        "hint": "使用 /td_st 后的冷却时间",
+        "description": "/tp_st 冷却时间（秒）",
+        "hint": "使用 /tp_st 后的冷却时间",
         "slider": {"min": 0, "max": 300, "step": 1},
         "default": 30
+    },
+    "custom_enter_prompt": {
+        "type": "text",
+        "description": "自定义进入沉浸模式提示词",
+        "hint": "留空则使用内置预设模板。支持 {item_name} 占位符。此提示词会追加到每轮对话中。",
+        "default": ""
+    },
+    "custom_afterglow_prompt": {
+        "type": "text",
+        "description": "自定义余韵阶段提示词",
+        "hint": "留空则使用内置预设模板。支持 {item_name} 占位符。",
+        "default": ""
+    },
+    "custom_exit_prompt": {
+        "type": "text",
+        "description": "自定义退出沉浸模式提示词",
+        "hint": "留空则使用内置预设模板。支持 {item_name} 占位符。",
+        "default": ""
+    },
+    "custom_presets": {
+        "type": "list",
+        "description": "自定义预设列表",
+        "hint": "每个元素是一个对象，包含 name、enter、afterglow、exit 字段。例如：[{\"name\": \"my_preset\", \"enter\": \"你进入了自定义模式...\", \"afterglow\": \"...\", \"exit\": \"...\"}]。创建后可通过 /mc_mode my_preset 切换。",
+        "default": []
     }
 }
