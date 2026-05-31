@@ -149,9 +149,41 @@
         "default": ""
     },
     "custom_presets": {
-        "type": "list",
+        "type": "template_list",
         "description": "自定义预设列表",
-        "hint": "每个元素是一个对象，包含 name、enter、afterglow、exit 字段。例如：[{\"name\": \"my_preset\", \"enter\": \"你进入了自定义模式...\", \"afterglow\": \"...\", \"exit\": \"...\"}]。创建后可通过 /mc_mode my_preset 切换。",
+        "hint": "创建自定义预设后，可通过 /mc_mode 预设名 切换。",
+        "templates": {
+            "preset": {
+                "name": "自定义预设",
+                "hint": "定义一个新的沉浸模式预设",
+                "items": {
+                    "name": {
+                        "description": "预设名称",
+                        "hint": "用 /mc_mode 此名称 来切换到此预设",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "enter": {
+                        "description": "进入沉浸模式时的提示词",
+                        "hint": "Bot进入沉浸模式时注入的提示词，支持 {item_name} 占位符",
+                        "type": "text",
+                        "default": ""
+                    },
+                    "afterglow": {
+                        "description": "余韵阶段的提示词",
+                        "hint": "退出沉浸模式后余韵阶段的提示词",
+                        "type": "text",
+                        "default": ""
+                    },
+                    "exit": {
+                        "description": "退出沉浸模式时的提示词",
+                        "hint": "Bot完全恢复时的提示词",
+                        "type": "text",
+                        "default": ""
+                    }
+                }
+            }
+        },
         "default": []
     }
 }
