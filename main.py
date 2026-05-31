@@ -1,6 +1,6 @@
 ﻿# ============================================================
-# 脑控大师 v2.3.7 - 多模式沉浸式互动插件
-# 支持：/tp_st远程启动 / /控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设 / 进入退出消息
+# 脑控大师 v2.4.0 - 多模式沉浸式互动插件
+# 支持：/控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设 / 进入退出消息 / 最大并发控制数
 # ============================================================
 
 from __future__ import annotations
@@ -73,10 +73,6 @@ class PluginConfig(ConfigNode):
     item_name: str
     group_whitelist: list[str]
     admin_only_mode: bool
-    waiting_timeout: int
-    remote_msg: str
-    tp_st_admin_only: bool
-    tp_st_cooldown: int
     custom_enter_prompt: str
     custom_afterglow_prompt: str
     custom_exit_prompt: str
@@ -85,6 +81,7 @@ class PluginConfig(ConfigNode):
     enter_msg_text: str
     exit_msg_enable: bool
     exit_msg_text: str
+    max_sessions: int
 
     def __init__(self, config: AstrBotConfig):
         super().__init__(config)
@@ -100,8 +97,6 @@ class Session:
     end: float | None = None
     exit_ts: float | None = None
     trigger_count: int = 0
-    waiting_start: float | None = None
-    waiting_timeout: float | None = None
     custom_sensitivity: int | None = None
 
 
@@ -117,11 +112,7 @@ class SessionStore:
         if not s:
             return
         now = time.time()
-        if s.state == "waiting":
-            timeout = s.waiting_timeout or self.cfg.waiting_timeout
-            if s.waiting_start and now - s.waiting_start > timeout:
-                self._data.pop(key, None)
-        elif s.state == "active":
+        if s.state == "active":
             if s.end is not None and s.end <= now:
                 s.state = "afterglow"
                 s.exit_ts = now
@@ -169,6 +160,10 @@ class SessionStore:
             existing = self._data.get(key)
             if existing and existing.state == "active":
                 return False, "已经在沉浸状态中"
+            # 检查最大并发会话数
+            active_count = sum(1 for s in self._data.values() if s.state == "active")
+            if active_count >= self.cfg.max_sessions:
+                return False, f"已达到最大并发控制数（{self.cfg.max_sessions}）"
             prev_count = existing.trigger_count if existing else 0
             self._data[key] = Session(
                 state="active",
@@ -180,36 +175,6 @@ class SessionStore:
             )
             self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
             return True, "ok"
-
-    async def activate_remote(self, key: str, umo: str, sensitivity: int | None = None) -> tuple[bool, str]:
-        async with self._lock:
-            now = time.time()
-            self._cleanup_one(key)
-            existing = self._data.get(key)
-            if existing and existing.state in ("active", "waiting"):
-                return False, "该会话已有活跃会话"
-            self._data[key] = Session(
-                state="waiting",
-                user_id="remote",
-                umo=umo,
-                waiting_start=now,
-                waiting_timeout=self.cfg.waiting_timeout,
-                custom_sensitivity=sensitivity,
-            )
-            return True, "ok"
-
-    async def transition_to_active(self, key: str, user_id: str) -> bool:
-        async with self._lock:
-            s = self._data.get(key)
-            if not s or s.state != "waiting":
-                return False
-            now = time.time()
-            s.state = "active"
-            s.user_id = user_id
-            s.end = now + self.cfg.state_duration
-            s.waiting_start = None
-            self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
-            return True
 
     async def deactivate(self, key: str) -> bool:
         async with self._lock:
@@ -263,9 +228,6 @@ class SessionStore:
             self._data.clear()
             self._cooldowns.clear()
             return count
-
-    def set_cooldown(self, key: str, seconds: int) -> None:
-        self._cooldowns[key] = (time.time() + seconds, time.time() + seconds)
 
 
 # ======================== 预设模板模块 ========================
@@ -486,12 +448,6 @@ class Main(Star):
             if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
                 return
 
-        # waiting -> active（不return，让消息继续流转到LLM）
-        session = await self.store.get(key)
-        if session and session.state == "waiting":
-            await self.store.transition_to_active(key, user_id)
-            session = await self.store.get(key)
-
         # exit
         if msg in self.cfg.exit_keywords:
             if session and session.state in ("active", "waiting"):
@@ -532,45 +488,6 @@ class Main(Star):
         else:
             yield event.plain_result(result_msg)
 
-    # ==================== /tp_st 远程启动 ====================
-
-    @filter.command("tp_st")
-    async def tp_st(self, event: AstrMessageEvent):
-        """远程启动，可选指定敏感度 /tp_st 或 /tp_st 50"""
-        if self.cfg.tp_st_admin_only and not event.is_admin():
-            yield event.plain_result("此指令仅管理员可用")
-            return
-
-        msg = event.message_str.strip()
-        parts = msg.split()
-        sensitivity = None
-        if len(parts) > 1:
-            try:
-                sensitivity = int(parts[1])
-                sensitivity = max(0, min(100, sensitivity))
-            except ValueError:
-                yield event.plain_result("强度必须是 0-100 的整数喵~")
-                return
-
-        key = self._get_key(event)
-        umo = event.unified_msg_origin
-
-        cd = await self.store.check_cooldown_user(key)
-        if cd > 0:
-            yield event.plain_result(f"还在冷却中，请等待 {cd} 秒")
-            return
-
-        ok, result_msg = await self.store.activate_remote(key, umo, sensitivity)
-        if not ok:
-            yield event.plain_result(result_msg)
-            return
-
-        self.store.set_cooldown(key, self.cfg.tp_st_cooldown)
-        eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
-        logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
-        remote_msg = self.cfg.remote_msg if self.cfg.remote_msg else "已进入远程模式，等待用户消息触发 LLM~"
-        yield event.plain_result(remote_msg)
-
     # ==================== 管理命令 ====================
 
     @filter.command("mc_help")
@@ -578,9 +495,9 @@ class Main(Star):
         custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
         all_modes = list(MODE_NAMES.values()) + custom_names
         lines = [
-            "【脑控大师 v2.3.7】", "",
+            "【脑控大师 v2.4.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
-            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /tp_st - 远程启动（可指定敏感度）",
+            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态",
             "  /控制 或 /控制 50 - 进入沉浸模式（使用当前模式，可指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（支持中文，管理员）", "",

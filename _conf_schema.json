@@ -104,31 +104,12 @@
         "hint": "开启后只有管理员可以触发沉浸模式",
         "default": false
     },
-    "waiting_timeout": {
+    "max_sessions": {
         "type": "int",
-        "description": "等待超时（秒）",
-        "hint": "/tp_st 远程启动后等待用户响应的超时时间",
-        "slider": {"min": 30, "max": 600, "step": 10},
-        "default": 300
-    },
-    "remote_msg": {
-        "type": "string",
-        "description": "远程启动提示消息",
-        "hint": "/tp_st 启动后显示的提示消息，留空使用默认",
-        "default": ""
-    },
-    "tp_st_admin_only": {
-        "type": "bool",
-        "description": "/tp_st 仅管理员可用",
-        "hint": "开启后只有管理员可以使用 /tp_st",
-        "default": false
-    },
-    "tp_st_cooldown": {
-        "type": "int",
-        "description": "/tp_st 冷却时间（秒）",
-        "hint": "使用 /tp_st 后的冷却时间",
-        "slider": {"min": 0, "max": 300, "step": 1},
-        "default": 30
+        "description": "最大并发控制数",
+        "hint": "系统同时允许的最大控制会话数，防止资源过度占用",
+        "slider": {"min": 1, "max": 100, "step": 1},
+        "default": 10
     },
     "custom_enter_prompt": {
         "type": "text",
