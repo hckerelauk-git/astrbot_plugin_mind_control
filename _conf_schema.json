@@ -148,18 +148,6 @@
         "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
         "default": "你已完全恢复正常。用平常方式自然对话。"
     },
-    "custom_afterglow_prompt": {
-        "type": "text",
-        "description": "自定义余韵阶段提示词",
-        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
-        "default": "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。"
-    },
-    "custom_exit_prompt": {
-        "type": "text",
-        "description": "自定义退出沉浸模式提示词",
-        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
-        "default": "你已完全恢复正常。用平常方式自然对话。"
-    },
     "custom_presets": {
         "type": "template_list",
         "description": "自定义预设列表",

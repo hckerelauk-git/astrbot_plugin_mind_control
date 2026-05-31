@@ -415,8 +415,9 @@ class Main(Star):
             template = templates["afterglow"]
         else:
             return
-        logger.info(f"[脑控大师] {key} 注入提示词，模式={self.cfg.mode}，状态={session.state}")
-        req.system_prompt += f"\n\n[脑控大师沉浸模式指令]\n{template}"
+        logger.info(f"[脑控大师] {key} 注入提示词，模式={self.cfg.mode}，状态={session.state}，敏感度={sensitivity}")
+        intensity_hint = f"（当前敏感度：{sensitivity}/100，强度曲线：{self.cfg.curve}）"
+        req.system_prompt += f"\n\n[脑控大师沉浸模式指令]\n{template}\n{intensity_hint}"
 
     # ==================== /控制 [强度] 指令 ====================
 
