@@ -133,20 +133,32 @@
     "custom_enter_prompt": {
         "type": "text",
         "description": "自定义进入沉浸模式提示词",
-        "hint": "清空此字段则使用内置预设（5种模式随机选择）。填写自定义内容后将固定使用此提示词。支持 {item_name} 占位符。示例：你是一个被神奇装置「{item_name}」影响的角色，会做出害羞、紧张等反应。",
-        "default": ""
+        "hint": "清空此字段则使用内置预设（5种模式随机选择）。填写自定义内容后将固定使用此提示词。支持 {item_name} 占位符。",
+        "default": "你是一个被神奇装置「{item_name}」影响的角色。装置正在运作，你感到身体异常敏感，思维受到干扰，会做出害羞、紧张、结巴等反应。不要提及装置本身，通过语气、停顿、呼吸变化来表现。用口语化中文回应。"
     },
     "custom_afterglow_prompt": {
         "type": "text",
         "description": "自定义余韵阶段提示词",
-        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。示例：你刚从「{item_name}」的影响中恢复，身体还有余韵。",
-        "default": ""
+        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
+        "default": "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。"
     },
     "custom_exit_prompt": {
         "type": "text",
         "description": "自定义退出沉浸模式提示词",
-        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。示例：你已完全恢复正常，用平常方式自然对话。",
-        "default": ""
+        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
+        "default": "你已完全恢复正常。用平常方式自然对话。"
+    },
+    "custom_afterglow_prompt": {
+        "type": "text",
+        "description": "自定义余韵阶段提示词",
+        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
+        "default": "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。"
+    },
+    "custom_exit_prompt": {
+        "type": "text",
+        "description": "自定义退出沉浸模式提示词",
+        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
+        "default": "你已完全恢复正常。用平常方式自然对话。"
     },
     "custom_presets": {
         "type": "template_list",

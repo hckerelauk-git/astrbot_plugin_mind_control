@@ -1,5 +1,5 @@
 ﻿# ============================================================
-# 脑控大师 v2.3.0 - 多模式沉浸式互动插件
+# 脑控大师 v2.3.5 - 多模式沉浸式互动插件
 # 支持：/tp_st远程启动 / /控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设 / 进入退出消息
 # ============================================================
 
@@ -459,12 +459,11 @@ class Main(Star):
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
             eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
-            mode_display = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
             logger.info(f"[脑控大师] {key} 进入沉浸模式，模式={self.cfg.mode}，敏感度={eff}")
-            if self.cfg.enter_msg_enable and self.cfg.enter_msg_text:
-                yield event.plain_result(self.cfg.enter_msg_text)
-            else:
-                yield event.plain_result(f"已进入【{mode_display}】模式，敏感度={eff}")
+            if self.cfg.enter_msg_enable:
+                enter_text = self.cfg.enter_msg_text if self.cfg.enter_msg_text else "已进入沉浸模式~"
+                yield event.plain_result(enter_text)
+            # 关闭时不yield，让消息流转到LLM，由LLM根据提示词回复
         else:
             yield event.plain_result(result_msg)
 
@@ -527,7 +526,8 @@ class Main(Star):
             if self.cfg.enter_msg_enable:
                 enter_text = self.cfg.enter_msg_text if self.cfg.enter_msg_text else "已进入沉浸模式~"
                 yield event.plain_result(enter_text)
-            return
+                return
+            # 关闭时不yield也不return，让消息继续流转到LLM
         else:
             yield event.plain_result(result_msg)
 
@@ -577,7 +577,7 @@ class Main(Star):
         custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
         all_modes = list(MODE_NAMES.values()) + custom_names
         lines = [
-            "【脑控大师 v2.3.0】", "",
+            "【脑控大师 v2.3.5】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
             "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /tp_st - 远程启动（可指定敏感度）",
             "  /控制 或 /控制 50 - 进入沉浸模式（使用当前模式，可指定敏感度）",
