@@ -9,9 +9,7 @@ import asyncio
 import math
 import random
 import time
-from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, get_type_hints
 
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
@@ -20,66 +18,6 @@ from astrbot.api import AstrBotConfig
 from astrbot.api import logger
 
 PLUGIN_NAME = "astrbot_plugin_mind_control"
-
-
-# ======================== 配置模块 ========================
-
-class ConfigNode:
-    _SCHEMA_CACHE: dict[type, dict[str, type]] = {}
-
-    @classmethod
-    def _schema(cls) -> dict[str, type]:
-        return cls._SCHEMA_CACHE.setdefault(cls, get_type_hints(cls))
-
-    def __init__(self, data: MutableMapping[str, Any]):
-        object.__setattr__(self, "_data", data)
-        for key in self._schema():
-            if key in data:
-                continue
-            logger.warning(f"[config:{self.__class__.__name__}] 缺少字段: {key}")
-
-    def __getattr__(self, key: str) -> Any:
-        if key in self._schema():
-            return self._data.get(key)
-        raise AttributeError(key)
-
-    def __setattr__(self, key: str, value: Any) -> None:
-        if key in self._schema():
-            self._data[key] = value
-            return
-        object.__setattr__(self, key, value)
-
-
-class PluginConfig(ConfigNode):
-    mode: str
-    scope: str
-    enter_keywords: list[str]
-    exit_keywords: list[str]
-    extend_keywords: list[str]
-    state_duration: int
-    extend_duration: int
-    cooldown_user: int
-    cooldown_group: int
-    sensitivity: int
-    curve: str
-    afterglow_enable: bool
-    afterglow_duration: int
-    item_name: str
-    group_whitelist: list[str]
-    admin_only_mode: bool
-    waiting_timeout: int
-    remote_msg: str
-    td_st_admin_only: bool
-    td_st_cooldown: int
-
-    def __init__(self, config: AstrBotConfig):
-        object.__setattr__(self, "_config", config)
-        super().__init__(config)
-
-    def save_config(self) -> None:
-        save = getattr(self._config, "save_config", None)
-        if callable(save):
-            save()
 
 
 # ======================== 会话状态模块 ========================
@@ -98,7 +36,7 @@ class Session:
 
 
 class SessionStore:
-    def __init__(self, config: PluginConfig):
+    def __init__(self, config: AstrBotConfig):
         self.cfg = config
         self._data: dict[str, Session] = {}
         self._cooldowns: dict[str, tuple[float, float]] = {}
@@ -110,7 +48,7 @@ class SessionStore:
             return
         now = time.time()
         if s.state == "waiting":
-            timeout = s.waiting_timeout or self.cfg.waiting_timeout
+            timeout = s.waiting_timeout or self.cfg.get("waiting_timeout", 300)
             if s.waiting_start and now - s.waiting_start > timeout:
                 self._data.pop(key, None)
         elif s.state == "active":
@@ -118,27 +56,28 @@ class SessionStore:
                 s.state = "afterglow"
                 s.exit_ts = now
         elif s.state == "afterglow":
-            afterglow = self.cfg.afterglow_duration if self.cfg.afterglow_enable else 0
+            afterglow = self.cfg.get("afterglow_duration", 30) if self.cfg.get("afterglow_enable", True) else 0
             if s.exit_ts and now - s.exit_ts > afterglow:
                 self._data.pop(key, None)
 
     def _calc_sensitivity(self, session: Session) -> int:
-        base = session.custom_sensitivity if session.custom_sensitivity is not None else self.cfg.sensitivity
+        base = session.custom_sensitivity if session.custom_sensitivity is not None else self.cfg.get("sensitivity", 50)
         if session.state != "active" or session.end is None:
             return base
-        total = self.cfg.state_duration
+        total = self.cfg.get("state_duration", 180)
         if total <= 0:
             return base
         start = session.end - total
         elapsed = time.time() - start
         progress = max(0.0, min(1.0, elapsed / total))
-        if self.cfg.curve == "flat":
+        curve = self.cfg.get("curve", "flat")
+        if curve == "flat":
             return base
-        elif self.cfg.curve == "ramp_up":
+        elif curve == "ramp_up":
             return int(base * (0.3 + 0.7 * progress))
-        elif self.cfg.curve == "decay":
+        elif curve == "decay":
             return int(base * (1.0 - 0.7 * progress))
-        elif self.cfg.curve == "wave":
+        elif curve == "wave":
             wave = (math.sin(progress * math.pi * 2) + 1) / 2
             return int(base * (0.5 + 0.5 * wave))
         return base
@@ -152,7 +91,7 @@ class SessionStore:
         async with self._lock:
             self._cleanup_one(key)
             s = self._data.get(key)
-            return self._calc_sensitivity(s) if s else self.cfg.sensitivity
+            return self._calc_sensitivity(s) if s else self.cfg.get("sensitivity", 50)
 
     async def activate(self, key: str, user_id: str, sensitivity: int | None = None) -> tuple[bool, str]:
         async with self._lock:
@@ -166,11 +105,13 @@ class SessionStore:
                 state="active",
                 user_id=user_id,
                 umo=existing.umo if existing else "",
-                end=now + self.cfg.state_duration,
+                end=now + self.cfg.get("state_duration", 180),
                 trigger_count=prev_count + 1,
                 custom_sensitivity=sensitivity,
             )
-            self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
+            cd_user = self.cfg.get("cooldown_user", 30)
+            cd_group = self.cfg.get("cooldown_group", 60)
+            self._cooldowns[key] = (now + cd_user, now + cd_group)
             return True, "ok"
 
     async def activate_remote(self, key: str, umo: str, sensitivity: int | None = None) -> tuple[bool, str]:
@@ -185,7 +126,7 @@ class SessionStore:
                 user_id="remote",
                 umo=umo,
                 waiting_start=now,
-                waiting_timeout=self.cfg.waiting_timeout,
+                waiting_timeout=self.cfg.get("waiting_timeout", 300),
                 custom_sensitivity=sensitivity,
             )
             return True, "ok"
@@ -198,9 +139,11 @@ class SessionStore:
             now = time.time()
             s.state = "active"
             s.user_id = user_id
-            s.end = now + self.cfg.state_duration
+            s.end = now + self.cfg.get("state_duration", 180)
             s.waiting_start = None
-            self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
+            cd_user = self.cfg.get("cooldown_user", 30)
+            cd_group = self.cfg.get("cooldown_group", 60)
+            self._cooldowns[key] = (now + cd_user, now + cd_group)
             return True
 
     async def deactivate(self, key: str) -> bool:
@@ -218,8 +161,9 @@ class SessionStore:
             if not s or s.state != "active":
                 return False, "当前不在沉浸状态"
             if s.end is not None:
-                s.end += self.cfg.extend_duration
-            return True, f"已延长 {self.cfg.extend_duration} 秒"
+                extend_dur = self.cfg.get("extend_duration", 60)
+                s.end += extend_dur
+            return True, f"已延长 {self.cfg.get('extend_duration', 60)} 秒"
 
     async def check_cooldown_user(self, key: str) -> int:
         async with self._lock:
@@ -237,7 +181,7 @@ class SessionStore:
             if not s:
                 return 0
             if s.state == "waiting" and s.waiting_start:
-                timeout = s.waiting_timeout or self.cfg.waiting_timeout
+                timeout = s.waiting_timeout or self.cfg.get("waiting_timeout", 300)
                 return max(0, int(timeout - (time.time() - s.waiting_start)))
             if s.state == "active" and s.end is not None:
                 return max(0, int(s.end - time.time()))
@@ -343,12 +287,13 @@ class Main(Star):
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-        self.cfg = PluginConfig(config)
-        self.store = SessionStore(self.cfg)
+        self.config = config
+        self.store = SessionStore(config)
 
     def _get_key(self, event: AstrMessageEvent) -> str:
         umo = event.unified_msg_origin
-        return f"{umo}:{event.get_sender_id()}" if self.cfg.scope == "user" else umo
+        scope = self.config.get("scope", "user")
+        return f"{umo}:{event.get_sender_id()}" if scope == "user" else umo
 
     # ==================== LLM 钩子 ====================
 
@@ -359,7 +304,9 @@ class Main(Star):
         if not session:
             return
         sensitivity = await self.store.get_sensitivity(key)
-        templates = get_templates(self.cfg.mode, self.cfg.item_name, sensitivity)
+        mode = self.config.get("mode", "control")
+        item_name = self.config.get("item_name", "特殊装置")
+        templates = get_templates(mode, item_name, sensitivity)
         if session.state == "active":
             template = templates["enter"]
         elif session.state == "afterglow":
@@ -387,12 +334,14 @@ class Main(Star):
         key = self._get_key(event)
         user_id = event.get_sender_id()
 
-        if self.cfg.admin_only_mode and not event.is_admin():
+        admin_only = self.config.get("admin_only_mode", False)
+        if admin_only and not event.is_admin():
             return
 
         if not event.is_private_chat():
             group_id = event.message_obj.group_id
-            if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
+            whitelist = self.config.get("group_whitelist", [])
+            if whitelist and group_id not in whitelist:
                 return
 
         cd_user = await self.store.check_cooldown_user(key)
@@ -400,7 +349,7 @@ class Main(Star):
             yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
             return
 
-        if self.cfg.scope == "session":
+        if self.config.get("scope", "user") == "session":
             cd_group = await self.store.check_cooldown_group(key)
             if cd_group > 0:
                 yield event.plain_result(f"群聊冷却中，请等待 {cd_group} 秒")
@@ -408,8 +357,8 @@ class Main(Star):
 
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
-            mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
-            eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
+            mode_name = MODE_NAMES.get(self.config.get("mode", "control"), self.config.get("mode", "control"))
+            eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
             logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
             return
         else:
@@ -425,12 +374,14 @@ class Main(Star):
         key = self._get_key(event)
         user_id = event.get_sender_id()
 
-        if self.cfg.admin_only_mode and not event.is_admin():
+        admin_only = self.config.get("admin_only_mode", False)
+        if admin_only and not event.is_admin():
             return
 
         if not event.is_private_chat():
             group_id = event.message_obj.group_id
-            if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
+            whitelist = self.config.get("group_whitelist", [])
+            if whitelist and group_id not in whitelist:
                 return
 
         # waiting -> active（不return，让消息继续流转到LLM）
@@ -440,23 +391,25 @@ class Main(Star):
             session = await self.store.get(key)
 
         # exit
-        if msg in self.cfg.exit_keywords:
+        exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
+        if msg in exit_kws:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
-                # 不 yield，让消息继续流转到 LLM，LLM 会注入 afterglow 模板回复
             return
 
         # extend
-        if msg in self.cfg.extend_keywords:
+        extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
+        if msg in extend_kws:
             if session and session.state == "active":
                 ok, _ = await self.store.extend(key)
                 if ok:
                     remaining = await self.store.get_remaining(key)
                     yield event.plain_result(f"已延长~ 剩余 {remaining} 秒")
-                return
+            return
 
-        # enter（普通关键词触发，不指定强度）
-        if msg not in self.cfg.enter_keywords:
+        # enter
+        enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
+        if msg not in enter_kws:
             return
 
         cd_user = await self.store.check_cooldown_user(key)
@@ -475,7 +428,7 @@ class Main(Star):
 
     async def _remote_start(self, event: AstrMessageEvent):
         """远程启动，可选指定敏感度 /mc_st 或 /mc_st 50"""
-        if self.cfg.td_st_admin_only and not event.is_admin():
+        if self.config.get("td_st_admin_only", False) and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
 
@@ -503,10 +456,10 @@ class Main(Star):
             yield event.plain_result(result_msg)
             return
 
-        self.store.set_cooldown(key, self.cfg.td_st_cooldown)
-        eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
+        self.store.set_cooldown(key, self.config.get("td_st_cooldown", 30))
+        eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
         logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
-        yield event.plain_result(self.cfg.remote_msg or "已进入远程模式，等待用户消息触发 LLM~")
+        yield event.plain_result(self.config.get("remote_msg") or "已进入远程模式，等待用户消息触发 LLM~")
 
     @filter.command("mc_st")
     async def mc_st(self, event: AstrMessageEvent):
@@ -527,6 +480,7 @@ class Main(Star):
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
+        mode = self.config.get("mode", "control")
         lines = [
             "【脑控大师 v2.1.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
@@ -534,7 +488,7 @@ class Main(Star):
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（管理员）", "",
             "强度控制：", "  /控制 或 /控制 50 → 进入控制模式（默认/指定敏感度）", "",
-            f"当前模式：{MODE_NAMES.get(self.cfg.mode, self.cfg.mode)}",
+            f"当前模式：{MODE_NAMES.get(mode, mode)}",
             f"可用模式：" + " / ".join(MODE_NAMES.values()),
         ]
         if event.message_obj.group_id:
@@ -550,7 +504,8 @@ class Main(Star):
             return
         remaining = await self.store.get_remaining(key)
         sensitivity = await self.store.get_sensitivity(key)
-        mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
+        mode = self.config.get("mode", "control")
+        mode_name = MODE_NAMES.get(mode, mode)
         state_names = {"waiting": "⏳等待", "active": "🔥激活", "afterglow": "💫余韵"}
         lines = [f"模式：{mode_name}", f"状态：{state_names.get(session.state, session.state)}"]
         if session.state == "active":
@@ -586,14 +541,16 @@ class Main(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def mc_mode(self, event: AstrMessageEvent, mode_name: str = ""):
         if not mode_name:
-            current = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
+            current = MODE_NAMES.get(self.config.get("mode", "control"), self.config.get("mode", "control"))
             yield event.plain_result(f"当前：{current}\n可用：{' / '.join(MODE_NAMES.values())}")
             return
         if mode_name not in MODE_NAMES:
             yield event.plain_result(f"未知模式，可用：{' / '.join(MODE_NAMES.keys())}")
             return
-        self.cfg.mode = mode_name
-        self.cfg.save_config()
+        self.config["mode"] = mode_name
+        save = getattr(self.config, "save_config", None)
+        if callable(save):
+            save()
         yield event.plain_result(f"已切换到【{MODE_NAMES[mode_name]}】模式")
 
     # ==================== 清理 ====================
