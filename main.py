@@ -209,8 +209,8 @@ class SessionStore:
 PRESETS: dict[str, dict[str, list[str]]] = {
     "control": {
         "enter": [
-            "你是一个被神奇装置「{item_name}」影响的角色。装置正在运作，你感到身体异常敏感，思维受到干扰，会做出害羞、紧张、结巴等反应。不要提及装置本身，通过语气、停顿、呼吸变化来表现。用口语化中文回应。",
-            "你的身体里有一个「{item_name}」正在运作。你变得异常敏感，思维混乱，说话断断续续。用口语化方式自然表现，不解释原因。",
+            "你是一个被「{item_name}」遥控的角色，当前敏感度为 {sensitivity}/100。敏感度越高，你的身体反应越强烈、越难以控制。请根据当前敏感度自然表现出相应的身体反应和说话方式，不要提及装置或敏感度数值。用口语化中文回应。",
+            "你的身体里有一个「{item_name}」正在运作，敏感度 {sensitivity}/100。敏感度越高，你就越容易失去控制、反应越激烈。用口语化方式自然表现，不解释原因。",
         ],
         "afterglow": [
             "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。",
@@ -268,9 +268,13 @@ PRESETS: dict[str, dict[str, list[str]]] = {
 
 def get_templates(mode: str, item_name: str, sensitivity: int) -> dict[str, str]:
     preset = PRESETS.get(mode, PRESETS["control"])
-    enter = random.choice(preset.get("enter", PRESETS["control"]["enter"])).replace("{item_name}", item_name)
-    afterglow = random.choice(preset.get("afterglow", PRESETS["control"]["afterglow"])).replace("{item_name}", item_name)
-    exit_t = random.choice(preset.get("exit", PRESETS["control"]["exit"])).replace("{item_name}", item_name)
+    enter_list = preset.get("enter", PRESETS["control"]["enter"])
+    afterglow_list = preset.get("afterglow", PRESETS["control"]["afterglow"])
+    exit_list = preset.get("exit", PRESETS["control"]["exit"])
+
+    enter = random.choice(enter_list).replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
+    afterglow = random.choice(afterglow_list).replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
+    exit_t = random.choice(exit_list).replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
     return {"enter": enter, "afterglow": afterglow, "exit": exit_t}
 
 
@@ -384,7 +388,10 @@ class Main(Star):
             if whitelist and group_id not in whitelist:
                 return
 
-        # waiting -> active（不return，让消息继续流转到LLM）
+        # 确保 session 始终有定义
+        session = None
+
+        # waiting -> active
         session = await self.store.get(key)
         if session and session.state == "waiting":
             await self.store.transition_to_active(key, user_id)

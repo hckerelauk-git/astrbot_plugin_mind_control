@@ -1,4 +1,14 @@
-# 脑控大师 v2.1.0 发布说明
+# 脑控大师 更新日志
+
+## [v2.1.1] - 2026-06-13
+### 修复
+- 修复配置访问bug，彻底移除旧的 `ConfigNode` 封装
+- 统一使用 `AstrBotConfig.get("key", default)` 读取配置
+- 修复 `name 'session' is not defined` 错误
+- 修复所有 `self.cfg.xxx` 访问方式导致的兼容问题
+
+## [v2.1.0] - 2026-06-06
+### 发布说明
 
 ## 🎯 插件概述
 **脑控大师** (astrbot_plugin_mind_control) 是一个 AstrBot 多模式沉浸式互动插件。  
