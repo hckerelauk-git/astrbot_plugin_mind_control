@@ -1,6 +1,6 @@
-﻿# ============================================================
-# 脑控大师 v2.4.0 - 多模式沉浸式互动插件
-# 支持：/控制指定强度 / 5种预设模式 / 自定义提示词 / 自定义预设 / 进入退出消息 / 最大并发控制数
+# ============================================================
+# 脑控大师 v2.1.0 - 多模式沉浸式互动插件
+# 支持：/mc_st远程启动 / /控制指定强度 / 5种预设模式
 # ============================================================
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any, get_type_hints
 
-from astrbot.api.event import AstrMessageEvent, filter, MessageChain
+from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
@@ -33,7 +33,6 @@ class ConfigNode:
 
     def __init__(self, data: MutableMapping[str, Any]):
         object.__setattr__(self, "_data", data)
-        object.__setattr__(self, "_raw_config", data)
         for key in self._schema():
             if key in data:
                 continue
@@ -49,11 +48,6 @@ class ConfigNode:
             self._data[key] = value
             return
         object.__setattr__(self, key, value)
-
-    def save_config(self) -> None:
-        """保存配置到文件"""
-        if hasattr(self._raw_config, "save_config"):
-            self._raw_config.save_config()
 
 
 class PluginConfig(ConfigNode):
@@ -73,18 +67,19 @@ class PluginConfig(ConfigNode):
     item_name: str
     group_whitelist: list[str]
     admin_only_mode: bool
-    custom_enter_prompt: str
-    custom_afterglow_prompt: str
-    custom_exit_prompt: str
-    custom_presets: list[dict]
-    enter_msg_enable: bool
-    enter_msg_text: str
-    exit_msg_enable: bool
-    exit_msg_text: str
-    max_sessions: int
+    waiting_timeout: int
+    remote_msg: str
+    td_st_admin_only: bool
+    td_st_cooldown: int
 
     def __init__(self, config: AstrBotConfig):
+        object.__setattr__(self, "_config", config)
         super().__init__(config)
+
+    def save_config(self) -> None:
+        save = getattr(self._config, "save_config", None)
+        if callable(save):
+            save()
 
 
 # ======================== 会话状态模块 ========================
@@ -97,6 +92,8 @@ class Session:
     end: float | None = None
     exit_ts: float | None = None
     trigger_count: int = 0
+    waiting_start: float | None = None
+    waiting_timeout: float | None = None
     custom_sensitivity: int | None = None
 
 
@@ -112,7 +109,11 @@ class SessionStore:
         if not s:
             return
         now = time.time()
-        if s.state == "active":
+        if s.state == "waiting":
+            timeout = s.waiting_timeout or self.cfg.waiting_timeout
+            if s.waiting_start and now - s.waiting_start > timeout:
+                self._data.pop(key, None)
+        elif s.state == "active":
             if s.end is not None and s.end <= now:
                 s.state = "afterglow"
                 s.exit_ts = now
@@ -160,10 +161,6 @@ class SessionStore:
             existing = self._data.get(key)
             if existing and existing.state == "active":
                 return False, "已经在沉浸状态中"
-            # 检查最大并发会话数
-            active_count = sum(1 for s in self._data.values() if s.state == "active")
-            if active_count >= self.cfg.max_sessions:
-                return False, f"已达到最大并发控制数（{self.cfg.max_sessions}）"
             prev_count = existing.trigger_count if existing else 0
             self._data[key] = Session(
                 state="active",
@@ -175,6 +172,36 @@ class SessionStore:
             )
             self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
             return True, "ok"
+
+    async def activate_remote(self, key: str, umo: str, sensitivity: int | None = None) -> tuple[bool, str]:
+        async with self._lock:
+            now = time.time()
+            self._cleanup_one(key)
+            existing = self._data.get(key)
+            if existing and existing.state in ("active", "waiting"):
+                return False, "该会话已有活跃会话"
+            self._data[key] = Session(
+                state="waiting",
+                user_id="remote",
+                umo=umo,
+                waiting_start=now,
+                waiting_timeout=self.cfg.waiting_timeout,
+                custom_sensitivity=sensitivity,
+            )
+            return True, "ok"
+
+    async def transition_to_active(self, key: str, user_id: str) -> bool:
+        async with self._lock:
+            s = self._data.get(key)
+            if not s or s.state != "waiting":
+                return False
+            now = time.time()
+            s.state = "active"
+            s.user_id = user_id
+            s.end = now + self.cfg.state_duration
+            s.waiting_start = None
+            self._cooldowns[key] = (now + self.cfg.cooldown_user, now + self.cfg.cooldown_group)
+            return True
 
     async def deactivate(self, key: str) -> bool:
         async with self._lock:
@@ -228,6 +255,9 @@ class SessionStore:
             self._data.clear()
             self._cooldowns.clear()
             return count
+
+    def set_cooldown(self, key: str, seconds: int) -> None:
+        self._cooldowns[key] = (time.time() + seconds, time.time() + seconds)
 
 
 # ======================== 预设模板模块 ========================
@@ -292,36 +322,11 @@ PRESETS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def get_templates(mode: str, item_name: str, sensitivity: int, cfg: PluginConfig | None = None) -> dict[str, str]:
-    """获取提示词模板，支持自定义提示词和自定义预设"""
-    # 1. 检查是否是自定义预设
-    custom_presets = cfg.custom_presets if cfg and hasattr(cfg, 'custom_presets') and cfg.custom_presets else []
-    for cp in custom_presets:
-        if isinstance(cp, dict) and cp.get("name") == mode:
-            enter = cp.get("enter", "").replace("{item_name}", item_name)
-            afterglow = cp.get("afterglow", "").replace("{item_name}", item_name)
-            exit_t = cp.get("exit", "").replace("{item_name}", item_name)
-            return {
-                "enter": enter or PRESETS["control"]["enter"][0],
-                "afterglow": afterglow or PRESETS["control"]["afterglow"][0],
-                "exit": exit_t or PRESETS["control"]["exit"][0],
-            }
-
-    # 2. 使用内置预设
+def get_templates(mode: str, item_name: str, sensitivity: int) -> dict[str, str]:
     preset = PRESETS.get(mode, PRESETS["control"])
     enter = random.choice(preset.get("enter", PRESETS["control"]["enter"])).replace("{item_name}", item_name)
     afterglow = random.choice(preset.get("afterglow", PRESETS["control"]["afterglow"])).replace("{item_name}", item_name)
     exit_t = random.choice(preset.get("exit", PRESETS["control"]["exit"])).replace("{item_name}", item_name)
-
-    # 3. 如果用户配置了自定义提示词，优先使用
-    if cfg:
-        if cfg.custom_enter_prompt:
-            enter = cfg.custom_enter_prompt.replace("{item_name}", item_name)
-        if cfg.custom_afterglow_prompt:
-            afterglow = cfg.custom_afterglow_prompt.replace("{item_name}", item_name)
-        if cfg.custom_exit_prompt:
-            exit_t = cfg.custom_exit_prompt.replace("{item_name}", item_name)
-
     return {"enter": enter, "afterglow": afterglow, "exit": exit_t}
 
 
@@ -329,22 +334,6 @@ MODE_NAMES: dict[str, str] = {
     "control": "控制", "pet": "宠物化", "teacher": "师徒",
     "shy": "害羞", "tsundere": "傲娇",
 }
-
-# 中文/别名 → 英文模式名 的反向映射
-MODE_ALIASES: dict[str, str] = {
-    "控制": "control", "宠物化": "pet", "师徒": "teacher",
-    "害羞": "shy", "傲娇": "tsundere",
-}
-
-
-def resolve_mode_name(name: str) -> str | None:
-    """将用户输入的模式名（中文/英文/别名）解析为标准英文模式名"""
-    name_lower = name.strip().lower()
-    if name_lower in MODE_NAMES:
-        return name_lower
-    if name in MODE_ALIASES:
-        return MODE_ALIASES[name]
-    return None
 
 
 # ======================== 插件主类 ========================
@@ -370,16 +359,14 @@ class Main(Star):
         if not session:
             return
         sensitivity = await self.store.get_sensitivity(key)
-        templates = get_templates(self.cfg.mode, self.cfg.item_name, sensitivity, self.cfg)
+        templates = get_templates(self.cfg.mode, self.cfg.item_name, sensitivity)
         if session.state == "active":
             template = templates["enter"]
         elif session.state == "afterglow":
             template = templates["afterglow"]
         else:
             return
-        logger.info(f"[脑控大师] {key} 注入提示词，模式={self.cfg.mode}，状态={session.state}，敏感度={sensitivity}")
-        intensity_hint = f"（当前敏感度：{sensitivity}/100，强度曲线：{self.cfg.curve}）"
-        req.system_prompt += f"\n\n[脑控大师沉浸模式指令]\n{template}\n{intensity_hint}"
+        req.system_prompt += f"\n\n{template}"
 
     # ==================== /控制 [强度] 指令 ====================
 
@@ -421,12 +408,10 @@ class Main(Star):
 
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
+            mode_name = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
             eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
-            logger.info(f"[脑控大师] {key} 进入沉浸模式，模式={self.cfg.mode}，敏感度={eff}")
-            if self.cfg.enter_msg_enable:
-                enter_text = self.cfg.enter_msg_text if self.cfg.enter_msg_text else "已进入沉浸模式~"
-                yield event.plain_result(enter_text)
-            # 关闭时不yield，让消息流转到LLM，由LLM根据提示词回复
+            logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
+            return
         else:
             yield event.plain_result(result_msg)
 
@@ -448,14 +433,16 @@ class Main(Star):
             if self.cfg.group_whitelist and group_id not in self.cfg.group_whitelist:
                 return
 
+        # waiting -> active（不return，让消息继续流转到LLM）
+        session = await self.store.get(key)
+        if session and session.state == "waiting":
+            await self.store.transition_to_active(key, user_id)
+            session = await self.store.get(key)
+
         # exit
         if msg in self.cfg.exit_keywords:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
-                if self.cfg.exit_msg_enable:
-                    exit_text = self.cfg.exit_msg_text if self.cfg.exit_msg_text else "已退出沉浸模式~"
-                    yield event.plain_result(exit_text)
-                    return
                 # 不 yield，让消息继续流转到 LLM，LLM 会注入 afterglow 模板回复
             return
 
@@ -480,31 +467,75 @@ class Main(Star):
         ok, result_msg = await self.store.activate(key, user_id)
         if ok:
             logger.info(f"[脑控大师] {key} 已进入沉浸模式")
-            if self.cfg.enter_msg_enable:
-                enter_text = self.cfg.enter_msg_text if self.cfg.enter_msg_text else "已进入沉浸模式~"
-                yield event.plain_result(enter_text)
-                return
-            # 关闭时不yield也不return，让消息继续流转到LLM
+            return
         else:
             yield event.plain_result(result_msg)
+
+    # ==================== /mc_st 远程启动 ====================
+
+    async def _remote_start(self, event: AstrMessageEvent):
+        """远程启动，可选指定敏感度 /mc_st 或 /mc_st 50"""
+        if self.cfg.td_st_admin_only and not event.is_admin():
+            yield event.plain_result("此指令仅管理员可用")
+            return
+
+        msg = event.message_str.strip()
+        parts = msg.split()
+        sensitivity = None
+        if len(parts) > 1:
+            try:
+                sensitivity = int(parts[1])
+                sensitivity = max(0, min(100, sensitivity))
+            except ValueError:
+                yield event.plain_result("强度必须是 0-100 的整数喵~")
+                return
+
+        key = self._get_key(event)
+        umo = event.unified_msg_origin
+
+        cd = await self.store.check_cooldown_user(key)
+        if cd > 0:
+            yield event.plain_result(f"还在冷却中，请等待 {cd} 秒")
+            return
+
+        ok, result_msg = await self.store.activate_remote(key, umo, sensitivity)
+        if not ok:
+            yield event.plain_result(result_msg)
+            return
+
+        self.store.set_cooldown(key, self.cfg.td_st_cooldown)
+        eff = sensitivity if sensitivity is not None else self.cfg.sensitivity
+        logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
+        yield event.plain_result(self.cfg.remote_msg or "已进入远程模式，等待用户消息触发 LLM~")
+
+    @filter.command("mc_st")
+    async def mc_st(self, event: AstrMessageEvent):
+        async for result in self._remote_start(event):
+            yield result
+
+    @filter.command("td_st")
+    async def td_st(self, event: AstrMessageEvent):
+        async for result in self._remote_start(event):
+            yield result
+
+    @filter.command("tp_st")
+    async def tp_st(self, event: AstrMessageEvent):
+        async for result in self._remote_start(event):
+            yield result
 
     # ==================== 管理命令 ====================
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
-        custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
-        all_modes = list(MODE_NAMES.values()) + custom_names
         lines = [
-            "【脑控大师 v2.4.0】", "",
+            "【脑控大师 v2.1.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
-            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态",
-            "  /控制 或 /控制 50 - 进入沉浸模式（使用当前模式，可指定敏感度）",
+            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动（可指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
-            "  /mc_mode [模式名] - 切换模式（支持中文，管理员）", "",
+            "  /mc_mode [模式名] - 切换模式（管理员）", "",
+            "强度控制：", "  /控制 或 /控制 50 → 进入控制模式（默认/指定敏感度）", "",
             f"当前模式：{MODE_NAMES.get(self.cfg.mode, self.cfg.mode)}",
-            f"可用模式：" + " / ".join(all_modes),
-            "",
-            "自定义：可在插件配置中设置自定义提示词、自定义预设、进入/退出消息",
+            f"可用模式：" + " / ".join(MODE_NAMES.values()),
         ]
         if event.message_obj.group_id:
             lines.append(f"\n当前群 ID：{event.message_obj.group_id}")
@@ -556,29 +587,14 @@ class Main(Star):
     async def mc_mode(self, event: AstrMessageEvent, mode_name: str = ""):
         if not mode_name:
             current = MODE_NAMES.get(self.cfg.mode, self.cfg.mode)
-            custom_names = [cp.get("name", "?") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
-            all_modes = list(MODE_NAMES.values()) + custom_names
-            yield event.plain_result(f"当前：{current}\n可用：{' / '.join(all_modes)}")
+            yield event.plain_result(f"当前：{current}\n可用：{' / '.join(MODE_NAMES.values())}")
             return
-
-        resolved = resolve_mode_name(mode_name)
-        if not resolved:
-            # 检查自定义预设
-            custom_presets = self.cfg.custom_presets or []
-            for cp in custom_presets:
-                if isinstance(cp, dict) and cp.get("name") == mode_name:
-                    resolved = mode_name
-                    break
-
-        if not resolved:
-            all_modes = list(MODE_NAMES.keys()) + [cp.get("name", "") for cp in (self.cfg.custom_presets or []) if isinstance(cp, dict)]
-            yield event.plain_result(f"未知模式，可用：{' / '.join(all_modes)}")
+        if mode_name not in MODE_NAMES:
+            yield event.plain_result(f"未知模式，可用：{' / '.join(MODE_NAMES.keys())}")
             return
-
-        self.cfg.mode = resolved
+        self.cfg.mode = mode_name
         self.cfg.save_config()
-        display_name = MODE_NAMES.get(resolved, resolved)
-        yield event.plain_result(f"已切换到【{display_name}】模式")
+        yield event.plain_result(f"已切换到【{MODE_NAMES[mode_name]}】模式")
 
     # ==================== 清理 ====================
 
