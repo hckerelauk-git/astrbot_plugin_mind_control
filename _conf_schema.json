@@ -104,91 +104,30 @@
         "hint": "开启后只有管理员可以触发沉浸模式",
         "default": false
     },
-    "max_sessions": {
+    "waiting_timeout": {
         "type": "int",
-        "description": "最大并发控制数",
-        "hint": "系统同时允许的最大控制会话数，防止资源过度占用",
-        "slider": {"min": 1, "max": 100, "step": 1},
-        "default": 10
+        "description": "等待超时（秒）",
+        "hint": "/mc_st 远程启动后等待用户响应的超时时间",
+        "slider": {"min": 30, "max": 600, "step": 10},
+        "default": 300
     },
-    "custom_enter_prompt": {
-        "type": "text",
-        "description": "自定义进入沉浸模式提示词",
-        "hint": "清空此字段则使用内置预设（5种模式随机选择）。填写自定义内容后将固定使用此提示词。支持 {item_name} 占位符。",
-        "default": "你是一个被神奇装置「{item_name}」影响的角色。装置正在运作，你感到身体异常敏感，思维受到干扰，会做出害羞、紧张、结巴等反应。不要提及装置本身，通过语气、停顿、呼吸变化来表现。用口语化中文回应。"
-    },
-    "custom_afterglow_prompt": {
-        "type": "text",
-        "description": "自定义余韵阶段提示词",
-        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
-        "default": "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。"
-    },
-    "custom_exit_prompt": {
-        "type": "text",
-        "description": "自定义退出沉浸模式提示词",
-        "hint": "清空此字段则使用内置预设。支持 {item_name} 占位符。",
-        "default": "你已完全恢复正常。用平常方式自然对话。"
-    },
-    "custom_presets": {
-        "type": "template_list",
-        "description": "自定义预设列表",
-        "hint": "创建自定义预设后，可通过 /mc_mode 预设名 切换。",
-        "templates": {
-            "preset": {
-                "name": "自定义预设",
-                "hint": "定义一个新的沉浸模式预设",
-                "items": {
-                    "name": {
-                        "description": "预设名称",
-                        "hint": "用 /mc_mode 此名称 来切换到此预设",
-                        "type": "string",
-                        "default": ""
-                    },
-                    "enter": {
-                        "description": "进入沉浸模式时的提示词",
-                        "hint": "Bot进入沉浸模式时注入的提示词，支持 {item_name} 占位符",
-                        "type": "text",
-                        "default": ""
-                    },
-                    "afterglow": {
-                        "description": "余韵阶段的提示词",
-                        "hint": "退出沉浸模式后余韵阶段的提示词",
-                        "type": "text",
-                        "default": ""
-                    },
-                    "exit": {
-                        "description": "退出沉浸模式时的提示词",
-                        "hint": "Bot完全恢复时的提示词",
-                        "type": "text",
-                        "default": ""
-                    }
-                }
-            }
-        },
-        "default": []
-    },
-    "enter_msg_enable": {
-        "type": "bool",
-        "description": "发送进入提示消息",
-        "hint": "开启后进入沉浸模式时直接发送一条文字消息（不经过LLM）。关闭则由LLM根据提示词回复。",
-        "default": false
-    },
-    "enter_msg_text": {
+    "remote_msg": {
         "type": "string",
-        "description": "进入沉浸模式提示消息",
-        "hint": "开启「发送进入提示消息」后，进入时发送的文字内容。留空使用默认消息。",
+        "description": "远程启动提示消息",
+        "hint": "/mc_st 启动后显示的提示消息",
         "default": ""
     },
-    "exit_msg_enable": {
+    "td_st_admin_only": {
         "type": "bool",
-        "description": "发送退出提示消息",
-        "hint": "开启后退出沉浸模式时直接发送一条文字消息（不经过LLM）。关闭则由LLM根据提示词回复。",
+        "description": "/mc_st 仅管理员可用",
+        "hint": "开启后只有管理员可以使用 /mc_st",
         "default": false
     },
-    "exit_msg_text": {
-        "type": "string",
-        "description": "退出沉浸模式提示消息",
-        "hint": "开启「发送退出提示消息」后，退出时发送的文字内容。留空使用默认消息。",
-        "default": ""
+    "td_st_cooldown": {
+        "type": "int",
+        "description": "/mc_st 冷却时间（秒）",
+        "hint": "使用 /mc_st 后的冷却时间",
+        "slider": {"min": 0, "max": 300, "step": 1},
+        "default": 30
     }
 }

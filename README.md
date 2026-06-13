@@ -51,6 +51,7 @@ git clone https://github.com/hckerelauk-git/astrbot_plugin_mind_control
 | `/mc_list` | 管理员 | 查看所有活跃会话 |
 | `/mc_clear` | 管理员 | 清除所有会话 |
 | `/mc_mode` | 管理员 | 切换预设模式 |
+| `/mc_st` | 可配置 | 远程启动，等待用户下一条消息触发 |
 
 ## 配置
 
@@ -74,6 +75,10 @@ git clone https://github.com/hckerelauk-git/astrbot_plugin_mind_control
 | item_name | 装置名称 | 特殊装置 |
 | group_whitelist | 群白名单 | []（空=不限制） |
 | admin_only_mode | 仅管理员 | false |
+| waiting_timeout | 远程启动等待超时（秒） | 300 |
+| remote_msg | 远程启动提示消息 | 空 |
+| td_st_admin_only | /mc_st 仅管理员 | false |
+| td_st_cooldown | /mc_st 冷却时间（秒） | 30 |
 
 ## 使用示例
 
