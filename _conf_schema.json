@@ -2,8 +2,7 @@
     "mode": {
         "type": "string",
         "description": "预设模式",
-        "hint": "选择沉浸式互动的预设场景",
-        "options": ["control", "pet", "teacher", "shy", "tsundere"],
+        "hint": "选择内置模式（control/pet/teacher/shy/tsundere）或输入你自定义预设的名称",
         "default": "control"
     },
     "scope": {
@@ -129,5 +128,39 @@
         "hint": "使用 /mc_st 后的冷却时间",
         "slider": {"min": 0, "max": 300, "step": 1},
         "default": 30
+    },
+    "custom_presets": {
+        "type": "template_list",
+        "description": "自定义预设模式",
+        "hint": "你可以在这里添加自己的预设模式。每个预设需要包含 enter（进入）、afterglow（余韵）、exit（退出）三种提示词模板。添加后可以在「预设模式」中选择。",
+        "templates": {
+            "custom": {
+                "name": "自定义预设",
+                "hint": "自定义预设模式",
+                "display_item": "name",
+                "items": {
+                    "name": {
+                        "description": "预设名称（用于在 mode 中选择）",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "enter": {
+                        "description": "进入提示词模板（可用 {item_name} 和 {sensitivity} 占位符）",
+                        "type": "text",
+                        "default": ""
+                    },
+                    "afterglow": {
+                        "description": "余韵提示词模板",
+                        "type": "text",
+                        "default": ""
+                    },
+                    "exit": {
+                        "description": "退出提示词模板",
+                        "type": "text",
+                        "default": ""
+                    }
+                }
+            }
+        }
     }
 }

@@ -266,7 +266,20 @@ PRESETS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def get_templates(mode: str, item_name: str, sensitivity: int) -> dict[str, str]:
+def get_templates(mode: str, item_name: str, sensitivity: int, custom_presets: list[dict] | None = None) -> dict[str, str]:
+    # 先检查自定义预设
+    if custom_presets:
+        for p in custom_presets:
+            if p.get("name") == mode:
+                enter = p.get("enter", "") or PRESETS.get("control", {}).get("enter", [""])[0]
+                afterglow = p.get("afterglow", "") or PRESETS.get("control", {}).get("afterglow", [""])[0]
+                exit_t = p.get("exit", "") or PRESETS.get("control", {}).get("exit", [""])[0]
+                enter = enter.replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
+                afterglow = afterglow.replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
+                exit_t = exit_t.replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
+                return {"enter": enter, "afterglow": afterglow, "exit": exit_t}
+
+    # 使用内置
     preset = PRESETS.get(mode, PRESETS["control"])
     enter_list = preset.get("enter", PRESETS["control"]["enter"])
     afterglow_list = preset.get("afterglow", PRESETS["control"]["afterglow"])
@@ -310,7 +323,8 @@ class Main(Star):
         sensitivity = await self.store.get_sensitivity(key)
         mode = self.config.get("mode", "control")
         item_name = self.config.get("item_name", "特殊装置")
-        templates = get_templates(mode, item_name, sensitivity)
+        custom_presets = self.config.get("custom_presets", [])
+        templates = get_templates(mode, item_name, sensitivity, custom_presets)
         if session.state == "active":
             template = templates["enter"]
         elif session.state == "afterglow":
