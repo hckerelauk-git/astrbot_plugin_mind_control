@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>脑控大师 - 自定义预设指南</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .card {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        code {
+            background: #e8f4fc;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: Consolas, monospace;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        .tip {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <h1>脑控大师 - 自定义预设指南</h1>
+
+    <p>从 v2.1.2 版本开始，脑控大师支持用户自定义预设模式和提示词模板。</p>
+
+    <h2>如何添加自定义预设</h2>
+
+    <div class="card">
+        <ol>
+            <li>在 AstrBot WebUI 中进入「插件管理」</li>
+            <li>找到「脑控大师」插件，点击配置</li>
+            <li>找到「自定义预设模式」配置项，点击添加</li>
+            <li>填写以下字段：</li>
+        </ol>
+    </div>
+
+    <h3>配置字段说明</h3>
+
+    <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background:#3498db; color:white;">
+            <th style="padding:10px; text-align:left;">字段</th>
+            <th style="padding:10px; text-align:left;">说明</th>
+            <th style="padding:10px; text-align:left;">示例</th>
+        </tr>
+        <tr>
+            <td style="padding:10px; border-bottom:1px solid #ddd;"><code>name</code></td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">预设名称（用于在「预设模式」中选择）</td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;"><code>maid</code></td>
+        </tr>
+        <tr>
+            <td style="padding:10px; border-bottom:1px solid #ddd;"><code>enter</code></td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">进入沉浸状态时的提示词模板</td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">你现在是女仆...</td>
+        </tr>
+        <tr>
+            <td style="padding:10px; border-bottom:1px solid #ddd;"><code>afterglow</code></td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">退出后的余韵阶段提示词</td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">你还在女仆状态...</td>
+        </tr>
+        <tr>
+            <td style="padding:10px; border-bottom:1px solid #ddd;"><code>exit</code></td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">完全退出后的提示词</td>
+            <td style="padding:10px; border-bottom:1px solid #ddd;">你恢复正常了</td>
+        </tr>
+    </table>
+
+    <h2>提示词模板占位符</h2>
+
+    <div class="card">
+        <ul>
+            <li><code>{item_name}</code> - 装置名称（来自配置项「装置名称」）</li>
+            <li><code>{sensitivity}</code> - 当前敏感度（0-100）</li>
+        </ul>
+    </div>
+
+    <h2>示例：女仆模式</h2>
+
+    <pre><code>{
+  "name": "maid",
+  "enter": "你现在是可爱的小女仆，当前敏感度 {sensitivity}/100。请用「主人」「请」等女仆语气说话，敏感度越高越容易害羞和颤抖。",
+  "afterglow": "你还在女仆状态中，偶尔会下意识用女仆语气说话。",
+  "exit": "你恢复了正常身份。"
+}</code></pre>
+
+    <div class="card tip">
+        <strong>提示：</strong>如果自定义预设的提示词留空，插件会自动 fallback 到 control 模式，避免注入空提示词。
+    </div>
+
+    <h2>使用自定义预设</h2>
+
+    <p>添加完成后，在「预设模式」配置项中直接输入你自定义的名称（例如 <code>maid</code>），即可切换到该预设。</p>
+
+    <hr>
+    <p style="color:#999; font-size:0.9em;">脑控大师 v2.1.2+</p>
+</body>
+</html>
