@@ -1,5 +1,12 @@
 # 脑控大师 更新日志
 
+## [v2.1.5] - 2026-06-14
+### 新增
+- 添加插件配置页面（pages/config/），支持可视化管理自定义预设
+- 页面展示当前模式的完整提示词内容
+- 支持在页面内添加/删除自定义预设
+- 后端新增 4 个 Pages API：/current、/presets、/preset/add、/preset/delete
+
 ## [v2.1.2] - 2026-06-13
 ### 新增
 - 支持用户自定义预设模式和提示词（通过 `_conf_schema.json` 的 `custom_presets` 配置）

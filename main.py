@@ -307,6 +307,32 @@ class Main(Star):
         self.config = config
         self.store = SessionStore(config)
 
+        # 注册 Pages API
+        context.register_web_api(
+            f"/{PLUGIN_NAME}/current",
+            self.page_get_current,
+            ["GET"],
+            "获取当前模式和提示词",
+        )
+        context.register_web_api(
+            f"/{PLUGIN_NAME}/presets",
+            self.page_get_presets,
+            ["GET"],
+            "获取所有预设",
+        )
+        context.register_web_api(
+            f"/{PLUGIN_NAME}/preset/add",
+            self.page_add_preset,
+            ["POST"],
+            "添加自定义预设",
+        )
+        context.register_web_api(
+            f"/{PLUGIN_NAME}/preset/delete",
+            self.page_delete_preset,
+            ["POST"],
+            "删除自定义预设",
+        )
+
     def _get_key(self, event: AstrMessageEvent) -> str:
         umo = event.unified_msg_origin
         scope = self.config.get("scope", "user")
@@ -578,3 +604,61 @@ class Main(Star):
 
     async def terminate(self):
         await self.store.clear_all()
+
+    # ==================== Pages API ====================
+
+    async def page_get_current(self):
+        from quart import jsonify
+        mode = self.config.get("mode", "control")
+        item_name = self.config.get("item_name", "特殊装置")
+        custom_presets = self.config.get("custom_presets", [])
+        templates = get_templates(mode, item_name, 50, custom_presets)
+        return jsonify({
+            "mode": mode,
+            "prompts": templates
+        })
+
+    async def page_get_presets(self):
+        from quart import jsonify
+        custom_presets = self.config.get("custom_presets", [])
+        return jsonify({
+            "builtin": list(PRESETS.keys()),
+            "custom": custom_presets
+        })
+
+    async def page_add_preset(self):
+        from quart import request, jsonify
+        data = await request.get_json()
+        name = data.get("name", "").strip()
+        if not name:
+            return jsonify({"error": "name required"}), 400
+
+        custom_presets = self.config.get("custom_presets", [])
+        # 去重
+        custom_presets = [p for p in custom_presets if p.get("name") != name]
+        custom_presets.append({
+            "name": name,
+            "enter": data.get("enter", ""),
+            "afterglow": data.get("afterglow", ""),
+            "exit": data.get("exit", "")
+        })
+        self.config["custom_presets"] = custom_presets
+        save = getattr(self.config, "save_config", None)
+        if callable(save):
+            save()
+        return jsonify({"success": True})
+
+    async def page_delete_preset(self):
+        from quart import request, jsonify
+        data = await request.get_json()
+        name = data.get("name", "").strip()
+        if not name:
+            return jsonify({"error": "name required"}), 400
+
+        custom_presets = self.config.get("custom_presets", [])
+        custom_presets = [p for p in custom_presets if p.get("name") != name]
+        self.config["custom_presets"] = custom_presets
+        save = getattr(self.config, "save_config", None)
+        if callable(save):
+            save()
+        return jsonify({"success": True})

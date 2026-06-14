@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <title>脑控大师 - 配置页面</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #1a1a1a;
+            --card-bg: #f8f9fa;
+            --border: #e0e0e0;
+            --primary: #3498db;
+        }
+        [data-theme="dark"] {
+            --bg: #1a1a1a;
+            --text: #e0e0e0;
+            --card-bg: #2d2d2d;
+            --border: #404040;
+            --primary: #5dade2;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        h1 { color: var(--primary); margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .section-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+        .preset-item {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .preset-name {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        .prompt-text {
+            font-size: 0.9em;
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: Consolas, monospace;
+        }
+        [data-theme="dark"] .prompt-text {
+            background: #1f1f1f;
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        button:hover { opacity: 0.9; }
+        button.secondary {
+            background: #95a5a6;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9em;
+            background: var(--bg);
+            color: var(--text);
+            box-sizing: border-box;
+        }
+        textarea { min-height: 60px; resize: vertical; }
+        .row { display: flex; gap: 10px; }
+        .row > * { flex: 1; }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .empty-hint {
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>脑控大师 - 配置</h1>
+    <p class="subtitle">当前版本：v2.1.5 | 支持自定义预设和提示词预览</p>
+
+    <!-- 当前模式 -->
+    <div class="card">
+        <div class="section-title">当前模式</div>
+        <div id="current-mode" style="font-size:1.2em; font-weight:600; margin-bottom:15px;"></div>
+
+        <div id="current-prompts">
+            <div class="preset-item">
+                <div class="preset-name">进入提示词 (enter)</div>
+                <div class="prompt-text" id="prompt-enter"></div>
+            </div>
+            <div class="preset-item">
+                <div class="preset-name">余韵提示词 (afterglow)</div>
+                <div class="prompt-text" id="prompt-afterglow"></div>
+            </div>
+            <div class="preset-item">
+                <div class="preset-name">退出提示词 (exit)</div>
+                <div class="prompt-text" id="prompt-exit"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义预设管理 -->
+    <div class="card">
+        <div class="section-title">自定义预设</div>
+
+        <div id="custom-presets-list">
+            <div class="empty-hint">暂无自定义预设</div>
+        </div>
+
+        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
+            <div class="section-title">添加新预设</div>
+
+            <div class="form-group">
+                <label>预设名称</label>
+                <input type="text" id="new-name" placeholder="例如：maid">
+            </div>
+
+            <div class="form-group">
+                <label>进入提示词</label>
+                <textarea id="new-enter" placeholder="你现在是... {item_name} ... {sensitivity}"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>余韵提示词</label>
+                <textarea id="new-afterglow" placeholder="你还在...状态中"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>退出提示词</label>
+                <textarea id="new-exit" placeholder="你恢复正常了"></textarea>
+            </div>
+
+            <button onclick="addPreset()">添加预设</button>
+        </div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>
