@@ -340,11 +340,19 @@ class Main(Star):
 
     # ==================== LLM 钩子 ====================
 
+    @staticmethod
+    def _preview(text: str, limit: int = 80) -> str:
+        one_line = " ".join(str(text or "").split())
+        if len(one_line) <= limit:
+            return one_line
+        return one_line[: limit - 3] + "..."
+
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
         key = self._get_key(event)
         session = await self.store.get(key)
         if not session:
+            logger.debug("[脑控大师] LLM钩子跳过 key=%s 无会话", key)
             return
         sensitivity = await self.store.get_sensitivity(key)
         mode = self.config.get("mode", "control")
@@ -353,11 +361,36 @@ class Main(Star):
         templates = get_templates(mode, item_name, sensitivity, custom_presets)
         if session.state == "active":
             template = templates["enter"]
+            phase = "enter"
         elif session.state == "afterglow":
             template = templates["afterglow"]
+            phase = "afterglow"
         else:
+            logger.info(
+                "[脑控大师] LLM钩子跳过 key=%s state=%s（非 active/afterglow）",
+                key,
+                session.state,
+            )
+            return
+        if not str(template).strip():
+            logger.warning(
+                "[脑控大师] LLM钩子未注入 key=%s mode=%s phase=%s 模板为空",
+                key,
+                mode,
+                phase,
+            )
             return
         req.system_prompt += f"\n\n{template}"
+        logger.info(
+            "[脑控大师] 已注入提示词 key=%s state=%s mode=%s 敏感度=%s phase=%s 长度=%s 预览=%s",
+            key,
+            session.state,
+            mode,
+            sensitivity,
+            phase,
+            len(template),
+            self._preview(template),
+        )
 
     # ==================== /控制 [强度] 指令 ====================
 
@@ -434,13 +467,16 @@ class Main(Star):
         if session and session.state == "waiting":
             await self.store.transition_to_active(key, user_id)
             session = await self.store.get(key)
+            logger.info("[脑控大师] waiting→active key=%s user=%s", key, user_id)
 
         # exit（进入 afterglow 后让本条消息继续流到 LLM）
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
         if msg in exit_kws:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
+                logger.info("[脑控大师] 退出沉浸 key=%s → afterglow，本条消息继续走 LLM", key)
             else:
+                logger.debug("[脑控大师] 退出词忽略 key=%s 无有效会话", key)
                 return
 
         # extend
@@ -451,6 +487,7 @@ class Main(Star):
                 if ok:
                     remaining = await self.store.get_remaining(key)
                     yield event.plain_result(f"已延长~ 剩余 {remaining} 秒")
+                    logger.info("[脑控大师] 延长沉浸 key=%s 剩余=%ss", key, remaining)
             return
 
         # enter（仅匹配进入关键词时才尝试激活）
@@ -463,10 +500,19 @@ class Main(Star):
 
             ok, result_msg = await self.store.activate(key, user_id)
             if ok:
-                logger.info(f"[脑控大师] {key} 已进入沉浸模式")
+                logger.info("[脑控大师] 关键词进入沉浸 key=%s，本条消息继续走 LLM 注入", key)
+                session = await self.store.get(key)
             else:
                 yield event.plain_result(result_msg)
                 return
+
+        if session and session.state in ("active", "afterglow"):
+            logger.info(
+                "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
+                key,
+                session.state,
+                self._preview(msg, 40),
+            )
 
     # ==================== /mc_st 远程启动 ====================
 
