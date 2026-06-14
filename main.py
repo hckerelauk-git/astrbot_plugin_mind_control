@@ -401,10 +401,8 @@ class Main(Star):
 
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
-            mode_name = MODE_NAMES.get(self.config.get("mode", "control"), self.config.get("mode", "control"))
             eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
             logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
-            return
         else:
             yield event.plain_result(result_msg)
 
@@ -437,12 +435,13 @@ class Main(Star):
             await self.store.transition_to_active(key, user_id)
             session = await self.store.get(key)
 
-        # exit
+        # exit（进入 afterglow 后让本条消息继续流到 LLM）
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
         if msg in exit_kws:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
-            return
+            else:
+                return
 
         # extend
         extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
@@ -454,22 +453,20 @@ class Main(Star):
                     yield event.plain_result(f"已延长~ 剩余 {remaining} 秒")
             return
 
-        # enter
+        # enter（仅匹配进入关键词时才尝试激活）
         enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
-        if msg not in enter_kws:
-            return
+        if msg in enter_kws:
+            cd_user = await self.store.check_cooldown_user(key)
+            if cd_user > 0:
+                yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
+                return
 
-        cd_user = await self.store.check_cooldown_user(key)
-        if cd_user > 0:
-            yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
-            return
-
-        ok, result_msg = await self.store.activate(key, user_id)
-        if ok:
-            logger.info(f"[脑控大师] {key} 已进入沉浸模式")
-            return
-        else:
-            yield event.plain_result(result_msg)
+            ok, result_msg = await self.store.activate(key, user_id)
+            if ok:
+                logger.info(f"[脑控大师] {key} 已进入沉浸模式")
+            else:
+                yield event.plain_result(result_msg)
+                return
 
     # ==================== /mc_st 远程启动 ====================
 

@@ -17,7 +17,7 @@ function showStatus(msg, isError = false) {
 
 async function loadCurrentMode() {
     try {
-        const data = await bridge.apiGet(`${PLUGIN_NAME}/current`);
+        const data = await bridge.apiGet("current");
         if (!data) return;
 
         document.getElementById("current-mode").textContent = data.mode || "control";
@@ -33,7 +33,7 @@ async function loadCurrentMode() {
 
 async function loadCustomPresets() {
     try {
-        const data = await bridge.apiGet(`${PLUGIN_NAME}/presets`);
+        const data = await bridge.apiGet("presets");
         const container = document.getElementById("custom-presets-list");
 
         if (!data || !data.custom || data.custom.length === 0) {
@@ -70,7 +70,7 @@ async function addPreset() {
     }
 
     try {
-        await bridge.apiPost(`${PLUGIN_NAME}/preset/add`, {
+        await bridge.apiPost("preset/add", {
             name, enter, afterglow, exit
         });
         showStatus("添加成功");
@@ -91,7 +91,7 @@ async function deletePreset(name) {
     if (!confirm(`确定删除预设「${name}」吗？`)) return;
 
     try {
-        await bridge.apiPost(`${PLUGIN_NAME}/preset/delete`, { name });
+        await bridge.apiPost("preset/delete", { name });
         showStatus("删除成功");
         await loadCustomPresets();
     } catch (e) {
