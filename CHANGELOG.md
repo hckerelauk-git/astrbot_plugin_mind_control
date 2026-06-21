@@ -1,6 +1,13 @@
 # 脑控大师 更新日志
 
 ## [v2.5.5] - 2026-06-21
+### 新增
+- 新增配置项 `max_concurrent`：限制同时处于 active 状态的会话数量（0 表示不限制）
+- 内部实现 per-key asyncio.Lock，支持多用户/多群并发安全访问
+- get 返回 Session 拷贝，避免外部修改内部状态
+- get_all_sessions 先用 global lock 拍快照再逐 key 读
+- activate / activate_remote / transition_to_active 均遵守并发限制
+
 ### 修复
 - 修复 deactivate/extend/check_cooldown/get_remaining/get_all_sessions/clear_all/set_cooldown
   所有方法用了不存在的 self._lock，统一改为 self._get_lock(key) 异步锁
@@ -10,7 +17,7 @@
 - 修复 control_cmd 中 admin_only/whitelist 检查使用裸 return 的问题
 - 修复退出关键词处理中 else 分支 return 阻断消息流到 LLM 的问题
 - 退出关键词触发后 session 变量重新获取，确保 on_llm_request 正确读到 afterglow 状态
-- 更新版本号到 v2.5.5，帮助信息同步更新
+- 更新版本号到 v2.5.5，metadata.yaml 同步，mc_help 帮助文本更新
 
 ## [v2.5.2] - 2026-06-14
 ### 优化
