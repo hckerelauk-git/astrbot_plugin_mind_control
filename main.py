@@ -1,5 +1,5 @@
 # ============================================================
-# 脑控大师 v2.1.0 - 多模式沉浸式互动插件
+# 脑控大师 v2.5.5 - 多模式沉浸式互动插件
 # 支持：/mc_st远程启动 / /控制指定强度 / 5种预设模式
 # ============================================================
 
@@ -40,7 +40,27 @@ class SessionStore:
         self.cfg = config
         self._data: dict[str, Session] = {}
         self._cooldowns: dict[str, tuple[float, float]] = {}
-        self._lock = asyncio.Lock()
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._global_lock = asyncio.Lock()
+
+    async def _get_lock(self, key: str) -> asyncio.Lock:
+        async with self._global_lock:
+            if key not in self._locks:
+                self._locks[key] = asyncio.Lock()
+            return self._locks[key]
+
+    def _copy_session(self, s: Session) -> Session:
+        return Session(
+            state=s.state,
+            user_id=s.user_id,
+            umo=s.umo,
+            end=s.end,
+            exit_ts=s.exit_ts,
+            trigger_count=s.trigger_count,
+            waiting_start=s.waiting_start,
+            waiting_timeout=s.waiting_timeout,
+            custom_sensitivity=s.custom_sensitivity,
+        )
 
     def _cleanup_one(self, key: str) -> None:
         s = self._data.get(key)
@@ -51,6 +71,8 @@ class SessionStore:
             timeout = s.waiting_timeout or self.cfg.get("waiting_timeout", 300)
             if s.waiting_start and now - s.waiting_start > timeout:
                 self._data.pop(key, None)
+                self._cooldowns.pop(key, None)
+                # 不要 pop _locks，锁对象要一直保留避免 key 复用时锁分裂
         elif s.state == "active":
             if s.end is not None and s.end <= now:
                 s.state = "afterglow"
@@ -59,6 +81,8 @@ class SessionStore:
             afterglow = self.cfg.get("afterglow_duration", 30) if self.cfg.get("afterglow_enable", True) else 0
             if s.exit_ts and now - s.exit_ts > afterglow:
                 self._data.pop(key, None)
+                self._cooldowns.pop(key, None)
+                # 同样不删除锁对象
 
     def _calc_sensitivity(self, session: Session) -> int:
         base = session.custom_sensitivity if session.custom_sensitivity is not None else self.cfg.get("sensitivity", 50)
@@ -83,18 +107,22 @@ class SessionStore:
         return base
 
     async def get(self, key: str) -> Session | None:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             self._cleanup_one(key)
-            return self._data.get(key)
+            s = self._data.get(key)
+            return self._copy_session(s) if s else None
 
     async def get_sensitivity(self, key: str) -> int:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             self._cleanup_one(key)
             s = self._data.get(key)
             return self._calc_sensitivity(s) if s else self.cfg.get("sensitivity", 50)
 
     async def activate(self, key: str, user_id: str, sensitivity: int | None = None) -> tuple[bool, str]:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             now = time.time()
             self._cleanup_one(key)
             existing = self._data.get(key)
@@ -115,7 +143,8 @@ class SessionStore:
             return True, "ok"
 
     async def activate_remote(self, key: str, umo: str, sensitivity: int | None = None) -> tuple[bool, str]:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             now = time.time()
             self._cleanup_one(key)
             existing = self._data.get(key)
@@ -132,7 +161,8 @@ class SessionStore:
             return True, "ok"
 
     async def transition_to_active(self, key: str, user_id: str) -> bool:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             s = self._data.get(key)
             if not s or s.state != "waiting":
                 return False
@@ -147,7 +177,8 @@ class SessionStore:
             return True
 
     async def deactivate(self, key: str) -> bool:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             s = self._data.get(key)
             if not s or s.state not in ("active", "waiting"):
                 return False
@@ -156,7 +187,8 @@ class SessionStore:
             return True
 
     async def extend(self, key: str) -> tuple[bool, str]:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             s = self._data.get(key)
             if not s or s.state != "active":
                 return False, "当前不在沉浸状态"
@@ -166,17 +198,20 @@ class SessionStore:
             return True, f"已延长 {self.cfg.get('extend_duration', 60)} 秒"
 
     async def check_cooldown_user(self, key: str) -> int:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             cd = self._cooldowns.get(key)
             return max(0, int(cd[0] - time.time())) if cd else 0
 
     async def check_cooldown_group(self, key: str) -> int:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             cd = self._cooldowns.get(key)
             return max(0, int(cd[1] - time.time())) if cd else 0
 
     async def get_remaining(self, key: str) -> int:
-        async with self._lock:
+        lock = await self._get_lock(key)
+        async with lock:
             s = self._data.get(key)
             if not s:
                 return 0
@@ -188,20 +223,35 @@ class SessionStore:
             return 0
 
     async def get_all_sessions(self) -> list[tuple[str, Session]]:
-        async with self._lock:
-            for key in list(self._data.keys()):
+        async with self._global_lock:
+            keys = list(self._data.keys())
+        result = []
+        for key in keys:
+            lock = await self._get_lock(key)
+            async with lock:
                 self._cleanup_one(key)
-            return [(key, s) for key, s in self._data.items()]
+                s = self._data.get(key)
+                if s:
+                    result.append((key, self._copy_session(s)))
+        return result
 
     async def clear_all(self) -> int:
-        async with self._lock:
-            count = len(self._data)
-            self._data.clear()
-            self._cooldowns.clear()
-            return count
+        async with self._global_lock:
+            keys = list(self._data.keys())
+        for key in keys:
+            lock = await self._get_lock(key)
+            async with lock:
+                self._data.pop(key, None)
+                self._cooldowns.pop(key, None)
+                self._locks.pop(key, None)
+        async with self._global_lock:
+            self._locks.clear()
+        return len(keys)
 
-    def set_cooldown(self, key: str, seconds: int) -> None:
-        self._cooldowns[key] = (time.time() + seconds, time.time() + seconds)
+    async def set_cooldown(self, key: str, seconds: int) -> None:
+        lock = await self._get_lock(key)
+        async with lock:
+            self._cooldowns[key] = (time.time() + seconds, time.time() + seconds)
 
 
 # ======================== 预设模板模块 ========================
@@ -267,7 +317,6 @@ PRESETS: dict[str, dict[str, list[str]]] = {
 
 
 def get_templates(mode: str, item_name: str, sensitivity: int, custom_presets: list[dict] | None = None) -> dict[str, str]:
-    # 先检查自定义预设
     if custom_presets:
         for p in custom_presets:
             if p.get("name") == mode:
@@ -279,7 +328,6 @@ def get_templates(mode: str, item_name: str, sensitivity: int, custom_presets: l
                 exit_t = exit_t.replace("{item_name}", item_name).replace("{sensitivity}", str(sensitivity))
                 return {"enter": enter, "afterglow": afterglow, "exit": exit_t}
 
-    # 使用内置
     preset = PRESETS.get(mode, PRESETS["control"])
     enter_list = preset.get("enter", PRESETS["control"]["enter"])
     afterglow_list = preset.get("afterglow", PRESETS["control"]["afterglow"])
@@ -307,7 +355,6 @@ class Main(Star):
         self.config = config
         self.store = SessionStore(config)
 
-        # 注册 Pages API
         context.register_web_api(
             f"/{PLUGIN_NAME}/current",
             self.page_get_current,
@@ -413,12 +460,14 @@ class Main(Star):
 
         admin_only = self.config.get("admin_only_mode", False)
         if admin_only and not event.is_admin():
+            yield event.plain_result("仅管理员可用")
             return
 
         if not event.is_private_chat():
             group_id = event.message_obj.group_id
             whitelist = self.config.get("group_whitelist", [])
             if whitelist and group_id not in whitelist:
+                yield event.plain_result("该群不在白名单中")
                 return
 
         cd_user = await self.store.check_cooldown_user(key)
@@ -436,6 +485,7 @@ class Main(Star):
         if ok:
             eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
             logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
+            yield event.plain_result(f"已进入沉浸模式 敏感度 {eff}")
         else:
             yield event.plain_result(result_msg)
 
@@ -459,27 +509,23 @@ class Main(Star):
             if whitelist and group_id not in whitelist:
                 return
 
-        # 确保 session 始终有定义
         session = None
 
-        # waiting -> active
         session = await self.store.get(key)
         if session and session.state == "waiting":
             await self.store.transition_to_active(key, user_id)
             session = await self.store.get(key)
-            logger.info("[脑控大师] waiting→active key=%s user=%s", key, user_id)
+            logger.info("[脑控大师] waiting->active key=%s user=%s", key, user_id)
 
-        # exit（进入 afterglow 后让本条消息继续流到 LLM）
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
         if msg in exit_kws:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
-                logger.info("[脑控大师] 退出沉浸 key=%s → afterglow，本条消息继续走 LLM", key)
+                logger.info("[脑控大师] 退出沉浸 key=%s -> afterglow，本条消息继续走 LLM", key)
+                session = await self.store.get(key)
             else:
                 logger.debug("[脑控大师] 退出词忽略 key=%s 无有效会话", key)
-                return
 
-        # extend
         extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
         if msg in extend_kws:
             if session and session.state == "active":
@@ -490,7 +536,6 @@ class Main(Star):
                     logger.info("[脑控大师] 延长沉浸 key=%s 剩余=%ss", key, remaining)
             return
 
-        # enter（仅匹配进入关键词时才尝试激活）
         enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
         if msg in enter_kws:
             cd_user = await self.store.check_cooldown_user(key)
@@ -546,7 +591,7 @@ class Main(Star):
             yield event.plain_result(result_msg)
             return
 
-        self.store.set_cooldown(key, self.config.get("td_st_cooldown", 30))
+        await self.store.set_cooldown(key, self.config.get("td_st_cooldown", 30))
         eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
         logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
         yield event.plain_result(self.config.get("remote_msg") or "已进入远程模式，等待用户消息触发 LLM~")
@@ -572,12 +617,12 @@ class Main(Star):
     async def mc_help(self, event: AstrMessageEvent):
         mode = self.config.get("mode", "control")
         lines = [
-            "【脑控大师 v2.1.0】", "",
+            "【脑控大师 v2.5.5】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
             "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动（可指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（管理员）", "",
-            "强度控制：", "  /控制 或 /控制 50 → 进入控制模式（默认/指定敏感度）", "",
+            "强度控制：", "  /控制 或 /控制 50 -> 进入控制模式（默认/指定敏感度）", "",
             f"当前模式：{MODE_NAMES.get(mode, mode)}",
             f"可用模式：" + " / ".join(MODE_NAMES.values()),
         ]
@@ -596,7 +641,7 @@ class Main(Star):
         sensitivity = await self.store.get_sensitivity(key)
         mode = self.config.get("mode", "control")
         mode_name = MODE_NAMES.get(mode, mode)
-        state_names = {"waiting": "⏳等待", "active": "🔥激活", "afterglow": "💫余韵"}
+        state_names = {"waiting": "等待", "active": "激活", "afterglow": "余韵"}
         lines = [f"模式：{mode_name}", f"状态：{state_names.get(session.state, session.state)}"]
         if session.state == "active":
             lines.append(f"剩余：{remaining}秒")
@@ -613,7 +658,7 @@ class Main(Star):
         if not all_sessions:
             yield event.plain_result("当前没有会话")
             return
-        state_names = {"waiting": "⏳等待", "active": "🔥激活", "afterglow": "💫余韵"}
+        state_names = {"waiting": "等待", "active": "激活", "afterglow": "余韵"}
         lines = [f"所有会话 ({len(all_sessions)} 个)："]
         for key, session in all_sessions:
             remaining = await self.store.get_remaining(key)
@@ -677,7 +722,6 @@ class Main(Star):
             return jsonify({"error": "name required"}), 400
 
         custom_presets = self.config.get("custom_presets", [])
-        # 去重
         custom_presets = [p for p in custom_presets if p.get("name") != name]
         custom_presets.append({
             "name": name,

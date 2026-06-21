@@ -1,5 +1,17 @@
 # 脑控大师 更新日志
 
+## [v2.5.5] - 2026-06-21
+### 修复
+- 修复 deactivate/extend/check_cooldown/get_remaining/get_all_sessions/clear_all/set_cooldown
+  所有方法用了不存在的 self._lock，统一改为 self._get_lock(key) 异步锁
+- 修复 clear_all 返回 0 的 bug，现正确返回清除数量
+- 修复 _remote_start 中 set_cooldown 未 await 的问题
+- 修复 control_cmd 激活成功后不返回提示消息的问题
+- 修复 control_cmd 中 admin_only/whitelist 检查使用裸 return 的问题
+- 修复退出关键词处理中 else 分支 return 阻断消息流到 LLM 的问题
+- 退出关键词触发后 session 变量重新获取，确保 on_llm_request 正确读到 afterglow 状态
+- 更新版本号到 v2.5.5，帮助信息同步更新
+
 ## [v2.5.2] - 2026-06-14
 ### 优化
 - 增加 LLM 提示词注入日志：会话状态、模式、敏感度、注入阶段、模板长度与预览
