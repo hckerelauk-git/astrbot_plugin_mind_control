@@ -129,13 +129,6 @@ class SessionStore:
             if existing and existing.state == "active":
                 return False, "已经在沉浸状态中"
 
-            # 并发限制检查
-            maxc = self.cfg.get("max_concurrent", 0)
-            if maxc > 0:
-                active_count = await self._count_active()
-                if active_count >= maxc:
-                    return False, f"已达到最大并发激活数限制（{maxc}）"
-
             prev_count = existing.trigger_count if existing else 0
             self._data[key] = Session(
                 state="active",
@@ -159,13 +152,6 @@ class SessionStore:
             if existing and existing.state in ("active", "waiting"):
                 return False, "该会话已有活跃会话"
 
-            # 并发限制检查
-            maxc = self.cfg.get("max_concurrent", 0)
-            if maxc > 0:
-                active_count = await self._count_active()
-                if active_count >= maxc:
-                    return False, f"已达到最大并发激活数限制（{maxc}）"
-
             self._data[key] = Session(
                 state="waiting",
                 user_id="remote",
@@ -182,13 +168,6 @@ class SessionStore:
             s = self._data.get(key)
             if not s or s.state != "waiting":
                 return False
-
-            # 并发限制检查
-            maxc = self.cfg.get("max_concurrent", 0)
-            if maxc > 0:
-                active_count = await self._count_active()
-                if active_count >= maxc:
-                    return False
 
             now = time.time()
             s.state = "active"
@@ -245,18 +224,6 @@ class SessionStore:
             if s.state == "active" and s.end is not None:
                 return max(0, int(s.end - time.time()))
             return 0
-
-    async def _count_active(self) -> int:
-        async with self._global_lock:
-            keys = list(self._data.keys())
-        count = 0
-        for k in keys:
-            lock = await self._get_lock(k)
-            async with lock:
-                s = self._data.get(k)
-                if s and s.state == "active":
-                    count += 1
-        return count
 
     async def get_all_sessions(self) -> list[tuple[str, Session]]:
         async with self._global_lock:
@@ -520,8 +487,7 @@ class Main(Star):
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
             eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
-            logger.info(f"[脑控大师] {key} 进入沉浸模式，敏感度={eff}")
-            yield event.plain_result(f"已进入沉浸模式 敏感度 {eff}")
+            logger.info(f"[脑控大师] {key} /控制指令激活，敏感度={eff}，不回复消息让 LLM 自然反应")
         else:
             yield event.plain_result(result_msg)
 

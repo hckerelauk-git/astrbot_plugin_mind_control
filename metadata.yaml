@@ -8,10 +8,6 @@ repo: https://github.com/hckerelauk-git/astrbot_plugin_mind_control
 help: |
   ## 脑控大师 v2.5.5
 
-  ### 新特性
-  - 并发控制：通过配置 `max_concurrent` 限制同时激活的会话数量（0=不限制）
-  - 内部使用 per-key 异步锁，支持多用户并发安全
-
   ### 指令
   - `/mc_help` — 查看帮助
   - `/mc_status` — 查看当前状态

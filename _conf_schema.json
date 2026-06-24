@@ -129,12 +129,6 @@
         "slider": {"min": 0, "max": 300, "step": 1},
         "default": 30
     },
-    "max_concurrent": {
-        "type": "int",
-        "description": "最大并发激活会话数",
-        "hint": "同时最多允许处于 active 状态的会话数量，0 表示不限制",
-        "default": 0
-    },
     "custom_presets": {
         "type": "template_list",
         "description": "自定义预设模式",
