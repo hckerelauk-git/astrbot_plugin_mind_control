@@ -27,6 +27,7 @@ class Session:
     state: str
     user_id: str
     umo: str
+    start: float | None = None
     end: float | None = None
     exit_ts: float | None = None
     trigger_count: int = 0
@@ -54,6 +55,7 @@ class SessionStore:
             state=s.state,
             user_id=s.user_id,
             umo=s.umo,
+            start=s.start,
             end=s.end,
             exit_ts=s.exit_ts,
             trigger_count=s.trigger_count,
@@ -86,13 +88,12 @@ class SessionStore:
 
     def _calc_sensitivity(self, session: Session) -> int:
         base = session.custom_sensitivity if session.custom_sensitivity is not None else self.cfg.get("sensitivity", 50)
-        if session.state != "active" or session.end is None:
+        if session.state != "active" or session.end is None or session.start is None:
             return base
         total = self.cfg.get("state_duration", 180)
         if total <= 0:
             return base
-        start = session.end - total
-        elapsed = time.time() - start
+        elapsed = time.time() - session.start
         progress = max(0.0, min(1.0, elapsed / total))
         curve = self.cfg.get("curve", "flat")
         if curve == "flat":
@@ -134,6 +135,7 @@ class SessionStore:
                 state="active",
                 user_id=user_id,
                 umo=existing.umo if existing else "",
+                start=now,
                 end=now + self.cfg.get("state_duration", 180),
                 trigger_count=prev_count + 1,
                 custom_sensitivity=sensitivity,
@@ -172,6 +174,8 @@ class SessionStore:
             now = time.time()
             s.state = "active"
             s.user_id = user_id
+            if s.start is None:
+                s.start = now
             s.end = now + self.cfg.get("state_duration", 180)
             s.waiting_start = None
             cd_user = self.cfg.get("cooldown_user", 30)
@@ -241,15 +245,16 @@ class SessionStore:
     async def clear_all(self) -> int:
         async with self._global_lock:
             keys = list(self._data.keys())
+        count = 0
         for key in keys:
             lock = await self._get_lock(key)
             async with lock:
-                self._data.pop(key, None)
-                self._cooldowns.pop(key, None)
-                self._locks.pop(key, None)
+                if self._data.pop(key, None) is not None:
+                    self._cooldowns.pop(key, None)
+                    count += 1
         async with self._global_lock:
             self._locks.clear()
-        return len(keys)
+        return count
 
     async def set_cooldown(self, key: str, seconds: int) -> None:
         lock = await self._get_lock(key)
@@ -262,8 +267,8 @@ class SessionStore:
 PRESETS: dict[str, dict[str, list[str]]] = {
     "control": {
         "enter": [
-            "你是一个被「{item_name}」遥控的角色，当前敏感度为 {sensitivity}/100。敏感度越高，你的身体反应越强烈、越难以控制。请根据当前敏感度自然表现出相应的身体反应和说话方式，不要提及装置或敏感度数值。用口语化中文回应。",
-            "你的身体里有一个「{item_name}」正在运作，敏感度 {sensitivity}/100。敏感度越高，你就越容易失去控制、反应越激烈。用口语化方式自然表现，不解释原因。",
+            "你是一个被「{item_name}」遥控的角色，当前敏感度为 {sensitivity}/100。范围 0-100，100 为极限。敏感度越低反应越轻微，越高则身体反应越强烈、越难以控制。请根据当前敏感度自然表现出相应的身体反应和说话方式，不要提及装置或敏感度数值。用口语化中文回应。",
+            "你的身体里有一个「{item_name}」正在运作，敏感度 {sensitivity}/100。范围 0-100，100 为极限。敏感度越低反应越轻微，越高则越容易失去控制、反应越激烈。用口语化方式自然表现，不解释原因。",
         ],
         "afterglow": [
             "你刚从「{item_name}」的影响中恢复，身体还有余韵，偶尔突然停顿或脸红。用自然口语回应，表现出恍惚状态。",
@@ -430,7 +435,14 @@ class Main(Star):
                 phase,
             )
             return
-        req.system_prompt += f"\n\n{template}"
+        if hasattr(req, "system_prompt") and isinstance(req.system_prompt, str):
+            req.system_prompt += f"\n\n{template}"
+        else:
+            logger.warning(
+                "[脑控大师] LLM钩子跳过 key=%s 当前 provider 不支持 system_prompt 注入",
+                key,
+            )
+            return
         logger.info(
             "[脑控大师] 已注入提示词 key=%s state=%s mode=%s 敏感度=%s phase=%s 长度=%s 预览=%s",
             key,
@@ -487,7 +499,8 @@ class Main(Star):
         ok, result_msg = await self.store.activate(key, user_id, sensitivity)
         if ok:
             eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
-            logger.info(f"[脑控大师] {key} /控制指令激活，敏感度={eff}，不回复消息让 LLM 自然反应")
+            logger.info(f"[脑控大师] {key} /控制指令激活，敏感度={eff}")
+            yield event.plain_result("")
         else:
             yield event.plain_result(result_msg)
 
@@ -503,12 +516,14 @@ class Main(Star):
 
         admin_only = self.config.get("admin_only_mode", False)
         if admin_only and not event.is_admin():
+            yield event.plain_result("仅管理员可用")
             return
 
         if not event.is_private_chat():
             group_id = event.message_obj.group_id
             whitelist = self.config.get("group_whitelist", [])
             if whitelist and group_id not in whitelist:
+                yield event.plain_result("该群不在白名单中")
                 return
 
         session = None
@@ -702,7 +717,7 @@ class Main(Star):
         mode = self.config.get("mode", "control")
         item_name = self.config.get("item_name", "特殊装置")
         custom_presets = self.config.get("custom_presets", [])
-        templates = get_templates(mode, item_name, 50, custom_presets)
+        templates = get_templates(mode, item_name, self.config.get("sensitivity", 50), custom_presets)
         return jsonify({
             "mode": mode,
             "prompts": templates
