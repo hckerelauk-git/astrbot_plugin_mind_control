@@ -45,8 +45,17 @@ async function loadCustomPresets() {
         for (const p of data.custom) {
             html += `
                 <div class="preset-item">
-                    <div class="preset-name">${p.name}</div>
-                    <div style="margin:8px 0;">
+                    <div class="preset-header">
+                        <div class="preset-name">${p.name}</div>
+                        <span class="preset-badge">自定义</span>
+                    </div>
+                    <div class="prompt-label">进入提示词</div>
+                    <div class="prompt-text">${escapeHtml(p.enter || "(空)")}</div>
+                    <div class="prompt-label">余韵提示词</div>
+                    <div class="prompt-text">${escapeHtml(p.afterglow || "(空)")}</div>
+                    <div class="prompt-label">退出提示词</div>
+                    <div class="prompt-text">${escapeHtml(p.exit || "(空)")}</div>
+                    <div class="btn-group" style="margin-top:12px;">
                         <button class="secondary" onclick="deletePreset('${p.name}')">删除</button>
                     </div>
                 </div>
@@ -56,6 +65,12 @@ async function loadCustomPresets() {
     } catch (e) {
         showStatus("加载自定义预设失败: " + e.message, true);
     }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 async function addPreset() {
@@ -75,7 +90,6 @@ async function addPreset() {
         });
         showStatus("添加成功");
 
-        // 清空表单
         document.getElementById("new-name").value = "";
         document.getElementById("new-enter").value = "";
         document.getElementById("new-afterglow").value = "";
@@ -99,10 +113,17 @@ async function deletePreset(name) {
     }
 }
 
+function switchSection(section) {
+    document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+    document.querySelector(`.nav-item[data-section="${section}"]`).classList.add("active");
+
+    document.getElementById("section-current").style.display = section === "current" ? "block" : "none";
+    document.getElementById("section-presets").style.display = section === "presets" ? "block" : "none";
+}
+
 async function init() {
     await bridge.ready();
 
-    // 应用主题
     if (bridge.getContext()?.isDark) {
         document.documentElement.setAttribute("data-theme", "dark");
     }
@@ -113,6 +134,10 @@ async function init() {
         } else {
             document.documentElement.removeAttribute("data-theme");
         }
+    });
+
+    document.querySelectorAll(".nav-item").forEach(el => {
+        el.addEventListener("click", () => switchSection(el.dataset.section));
     });
 
     await loadCurrentMode();

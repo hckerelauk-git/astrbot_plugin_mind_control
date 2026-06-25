@@ -2,158 +2,292 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8" />
-    <title>脑控大师 - 配置页面</title>
+    <title>脑控大师 - 配置</title>
     <style>
         :root {
-            --bg: #f4f7f6;
-            --text: #333;
-            --card-bg: #ffffff;
-            --border: #ddd;
-            --primary: #6366f1;
-            --accent: #4f46e5;
-        }
-        [data-theme="dark"] {
-            --bg: #111827;
-            --text: #f3f4f6;
-            --card-bg: #1f2937;
-            --border: #374151;
+            --bg: #0f172a;
+            --sidebar-bg: #1e293b;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --card-bg: #1e293b;
+            --border: #334155;
             --primary: #818cf8;
             --accent: #6366f1;
+            --danger: #f87171;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 40px 20px;
+            display: flex;
+            min-height: 100vh;
             background: var(--bg);
             color: var(--text);
+            line-height: 1.6;
         }
-        h1 { font-size: 1.8rem; margin-bottom: 5px; color: var(--primary); }
-        .subtitle { color: #6b7280; margin-bottom: 30px; font-size: 0.9rem; }
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            padding: 24px 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        .sidebar-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+        }
+        .nav-item:hover, .nav-item.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+        }
+        .nav-item.active {
+            font-weight: 600;
+        }
+        .main {
+            flex: 1;
+            margin-left: 260px;
+            padding: 32px 40px;
+            max-width: 900px;
+        }
+        .page-header {
+            margin-bottom: 32px;
+        }
+        .page-header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 24px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
-        .section-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text);
         }
         .preset-item {
             background: var(--bg);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 16px;
             margin-bottom: 12px;
-            transition: transform 0.2s;
         }
-        .preset-item:hover { transform: translateY(-2px); }
-        .preset-name { font-weight: 700; color: var(--primary); margin-bottom: 10px; }
+        .preset-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .preset-name {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 0.95rem;
+        }
+        .preset-badge {
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .prompt-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
         .prompt-text {
             font-size: 0.85rem;
-            background: rgba(0,0,0,0.03);
-            padding: 12px;
+            background: rgba(0,0,0,0.2);
+            padding: 10px 12px;
             border-radius: 6px;
             white-space: pre-wrap;
             font-family: 'Fira Code', monospace;
             border: 1px solid var(--border);
+            color: #e2e8f0;
         }
-        [data-theme="dark"] .prompt-text { background: rgba(255,255,255,0.05); }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            color: var(--text);
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: border-color 0.2s;
+        }
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        textarea { min-height: 70px; resize: vertical; }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
         button {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 10px 18px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            transition: background 0.2s;
+            font-size: 0.85rem;
+            transition: all 0.2s;
         }
-        button:hover { background: var(--accent); }
-        button.secondary { background: #ef4444; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; }
-        textarea, input[type="text"] {
-            width: 100%;
-            padding: 12px;
+        button:hover { background: var(--accent); transform: translateY(-1px); }
+        button.secondary {
+            background: transparent;
             border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--card-bg);
-            color: var(--text);
-            box-sizing: border-box;
+            color: var(--text-secondary);
         }
-        .status { padding: 12px; border-radius: 6px; margin-top: 15px; display: none; text-align: center; font-weight: 600; }
-        .status.success { background: #dcfce7; color: #166534; }
-        .status.error { background: #fee2e2; color: #991b1b; }
+        button.secondary:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+            background: rgba(248, 113, 113, 0.1);
+        }
+        .empty-hint {
+            color: var(--text-secondary);
+            font-style: italic;
+            padding: 24px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 16px;
+            display: none;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .status.success { background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
+        .status.error { background: rgba(248, 113, 113, 0.1); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.2); }
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
-    <h1>脑控大师 - 配置</h1>
-    <p class="subtitle">当前版本：v2.1.5 | 支持自定义预设和提示词预览</p>
-
-    <!-- 当前模式 -->
-    <div class="card">
-        <div class="section-title">当前模式</div>
-        <div id="current-mode" style="font-size:1.2em; font-weight:600; margin-bottom:15px;"></div>
-
-        <div id="current-prompts">
-            <div class="preset-item">
-                <div class="preset-name">进入提示词 (enter)</div>
-                <div class="prompt-text" id="prompt-enter"></div>
-            </div>
-            <div class="preset-item">
-                <div class="preset-name">余韵提示词 (afterglow)</div>
-                <div class="prompt-text" id="prompt-afterglow"></div>
-            </div>
-            <div class="preset-item">
-                <div class="preset-name">退出提示词 (exit)</div>
-                <div class="prompt-text" id="prompt-exit"></div>
-            </div>
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-title">脑控大师</div>
+            <div class="sidebar-subtitle">v2.5.5</div>
         </div>
-    </div>
+        <nav>
+            <div class="nav-item active" data-section="current">当前模式</div>
+            <div class="nav-item" data-section="presets">自定义预设</div>
+        </nav>
+    </aside>
 
-    <!-- 自定义预设管理 -->
-    <div class="card">
-        <div class="section-title">自定义预设</div>
-
-        <div id="custom-presets-list">
-            <div class="empty-hint">暂无自定义预设</div>
+    <main class="main">
+        <div class="page-header">
+            <h1>配置</h1>
+            <p>管理模式、提示词和自定义预设</p>
         </div>
 
-        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
-            <div class="section-title">添加新预设</div>
-
-            <div class="form-group">
-                <label>预设名称</label>
-                <input type="text" id="new-name" placeholder="例如：maid">
+        <div id="section-current">
+            <div class="card">
+                <div class="card-title">当前模式</div>
+                <div id="current-mode" style="font-size:1.1rem; font-weight:600; margin-bottom:16px; color:var(--primary);"></div>
+                <div id="current-prompts">
+                    <div class="prompt-label">进入提示词 (enter)</div>
+                    <div class="prompt-text" id="prompt-enter"></div>
+                    <div class="prompt-label">余韵提示词 (afterglow)</div>
+                    <div class="prompt-text" id="prompt-afterglow"></div>
+                    <div class="prompt-label">退出提示词 (exit)</div>
+                    <div class="prompt-text" id="prompt-exit"></div>
+                </div>
             </div>
-
-            <div class="form-group">
-                <label>进入提示词</label>
-                <textarea id="new-enter" placeholder="你现在是... {item_name} ... {sensitivity}"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>余韵提示词</label>
-                <textarea id="new-afterglow" placeholder="你还在...状态中"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>退出提示词</label>
-                <textarea id="new-exit" placeholder="你恢复正常了"></textarea>
-            </div>
-
-            <button onclick="addPreset()">添加预设</button>
         </div>
-    </div>
 
-    <div id="status" class="status"></div>
+        <div id="section-presets" style="display:none;">
+            <div class="card">
+                <div class="card-title">自定义预设</div>
+                <div id="custom-presets-list">
+                    <div class="empty-hint">暂无自定义预设</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">添加新预设</div>
+                <div class="form-group">
+                    <label>预设名称</label>
+                    <input type="text" id="new-name" placeholder="例如：maid">
+                </div>
+                <div class="form-group">
+                    <label>进入提示词</label>
+                    <textarea id="new-enter" placeholder="你现在是... {item_name} ... {sensitivity}"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>余韵提示词</label>
+                    <textarea id="new-afterglow" placeholder="你还在...状态中"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>退出提示词</label>
+                    <textarea id="new-exit" placeholder="你恢复正常了"></textarea>
+                </div>
+                <div class="btn-group">
+                    <button onclick="addPreset()">添加预设</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="status" class="status"></div>
+    </main>
 
     <script type="module" src="./app.js"></script>
 </body>
