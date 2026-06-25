@@ -1,5 +1,28 @@
 # 脑控大师 更新日志
 
+## [v2.6.0] - 2026-06-21
+### 新增
+- 配置页 UI 全面现代化：暗色侧边栏 + 卡片布局 + 左侧导航
+- 自定义预设列表展示完整提示词预览，带 badge 和 hover 动效
+- 更精致的表单样式、按钮交互和状态提示
+
+### 修复
+- 修复 deactivate/extend/check_cooldown/get_remaining/get_all_sessions/clear_all/set_cooldown
+  所有方法用了不存在的 self._lock，统一改为 self._get_lock(key) 异步锁
+- 修复 clear_all 返回数量不准的问题，现正确返回实际清除的会话数
+- 修复 _remote_start 中 set_cooldown 未 await 的问题
+- 修复 control_cmd 激活成功后不返回消息的问题，现 yield 空字符串防止事件泄漏给 LLM
+- 修复 control_cmd 中 admin_only/whitelist 检查使用裸 return 的问题
+- 修复退出关键词处理中 else 分支 return 阻断消息流到 LLM 的问题
+- 退出关键词触发后 session 变量重新获取，确保 on_llm_request 正确读到 afterglow 状态
+- 移除进入沉浸模式后产生的额外机器回复消息，让 LLM 自然响应
+- 移除了并发限制功能（max_concurrent），恢复为纯 per-key 并发处理
+- 给 Session 加 start 字段，修复 _calc_sensitivity 在延长后曲线计算错误的问题
+- 提示词模板补充敏感度范围说明（0-100，100 为极限），让 LLM 正确理解敏感度差异
+- on_llm_request 注入前增加 system_prompt 字段存在性检查，避免某些 provider 下静默失败
+- page_get_current 使用配置默认敏感度而非硬编码 50
+- 版本号更新到 v2.6.0，metadata.yaml 同步，mc_help 帮助文本更新
+
 ## [v2.5.5] - 2026-06-21
 ### 修复
 - 修复 deactivate/extend/check_cooldown/get_remaining/get_all_sessions/clear_all/set_cooldown
