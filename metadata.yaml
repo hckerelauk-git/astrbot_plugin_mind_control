@@ -3,7 +3,7 @@ display_name: 脑控大师
 short_desc: 多模式沉浸式互动插件，支持渐进强度、余韵、随机变体、远程启动
 desc: 给 Bot 安装可遥控的小装置，触发后 Bot 进入沉浸式互动状态。支持多种预设模式（控制/宠物/师徒/害羞/傲娇）、渐进强度曲线、余韵阶段、随机反应变体、/mc_st 指令远程启动。
 author: ELAUK
-version: v2.6.0
+version: v2.6.1
 repo: https://github.com/hckerelauk-git/astrbot_plugin_mind_control
 help: |
   ## 脑控大师 v2.5.5

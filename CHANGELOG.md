@@ -23,6 +23,11 @@
 - page_get_current 使用配置默认敏感度而非硬编码 50
 - 版本号更新到 v2.6.0，metadata.yaml 同步，mc_help 帮助文本更新
 
+## [v2.6.1] - 2026-06-25
+### 修复
+- 修复 admin_only 模式下非管理员发送普通消息也被拦截并回复「仅管理员可用」的问题
+- 现在 admin_only 仅在触发关键词（进入/退出/延长）时才生效，普通消息直接放行到 LLM
+
 ## [v2.5.5] - 2026-06-21
 ### 修复
 - 修复 deactivate/extend/check_cooldown/get_remaining/get_all_sessions/clear_all/set_cooldown

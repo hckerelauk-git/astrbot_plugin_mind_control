@@ -1,5 +1,5 @@
 # ============================================================
-# 脑控大师 v2.6.0 - 多模式沉浸式互动插件
+# 脑控大师 v2.6.1 - 多模式沉浸式互动插件
 # 支持：/mc_st远程启动 / /控制指定强度 / 5种预设模式
 # ============================================================
 
@@ -528,6 +528,9 @@ class Main(Star):
 
         session = None
 
+        admin_only = self.config.get("admin_only_mode", False)
+        is_trigger = False
+
         session = await self.store.get(key)
         if session and session.state == "waiting":
             await self.store.transition_to_active(key, user_id)
@@ -536,6 +539,10 @@ class Main(Star):
 
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
         if msg in exit_kws:
+            is_trigger = True
+            if admin_only and not event.is_admin():
+                yield event.plain_result("仅管理员可用")
+                return
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
                 logger.info("[脑控大师] 退出沉浸 key=%s -> afterglow，本条消息继续走 LLM", key)
@@ -545,6 +552,10 @@ class Main(Star):
 
         extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
         if msg in extend_kws:
+            is_trigger = True
+            if admin_only and not event.is_admin():
+                yield event.plain_result("仅管理员可用")
+                return
             if session and session.state == "active":
                 ok, _ = await self.store.extend(key)
                 if ok:
@@ -555,6 +566,11 @@ class Main(Star):
 
         enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
         if msg in enter_kws:
+            is_trigger = True
+            if admin_only and not event.is_admin():
+                yield event.plain_result("仅管理员可用")
+                return
+
             cd_user = await self.store.check_cooldown_user(key)
             if cd_user > 0:
                 yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
@@ -568,6 +584,7 @@ class Main(Star):
                 yield event.plain_result(result_msg)
                 return
 
+        # 普通消息且非触发词：不拦截，直接放行到 LLM
         if session and session.state in ("active", "afterglow"):
             logger.info(
                 "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
@@ -634,7 +651,7 @@ class Main(Star):
     async def mc_help(self, event: AstrMessageEvent):
         mode = self.config.get("mode", "control")
         lines = [
-            "【脑控大师 v2.6.0】", "",
+            "【脑控大师 v2.6.1】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
             "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动（可指定敏感度）",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
