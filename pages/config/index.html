@@ -5,115 +5,92 @@
     <title>脑控大师 - 配置页面</title>
     <style>
         :root {
-            --bg: #ffffff;
-            --text: #1a1a1a;
-            --card-bg: #f8f9fa;
-            --border: #e0e0e0;
-            --primary: #3498db;
+            --bg: #f4f7f6;
+            --text: #333;
+            --card-bg: #ffffff;
+            --border: #ddd;
+            --primary: #6366f1;
+            --accent: #4f46e5;
         }
         [data-theme="dark"] {
-            --bg: #1a1a1a;
-            --text: #e0e0e0;
-            --card-bg: #2d2d2d;
-            --border: #404040;
-            --primary: #5dade2;
+            --bg: #111827;
+            --text: #f3f4f6;
+            --card-bg: #1f2937;
+            --border: #374151;
+            --primary: #818cf8;
+            --accent: #6366f1;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 1000px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 40px 20px;
             background: var(--bg);
             color: var(--text);
-            line-height: 1.6;
         }
-        h1 { color: var(--primary); margin-bottom: 10px; }
-        .subtitle { color: #666; margin-bottom: 30px; }
+        h1 { font-size: 1.8rem; margin-bottom: 5px; color: var(--primary); }
+        .subtitle { color: #6b7280; margin-bottom: 30px; font-size: 0.9rem; }
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
+            border-radius: 12px;
+            padding: 24px;
             margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
         .section-title {
-            font-size: 1.1em;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: var(--primary);
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
         }
         .preset-item {
             background: var(--bg);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 10px;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: transform 0.2s;
         }
-        .preset-name {
-            font-weight: 600;
-            color: var(--primary);
-            margin-bottom: 8px;
-        }
+        .preset-item:hover { transform: translateY(-2px); }
+        .preset-name { font-weight: 700; color: var(--primary); margin-bottom: 10px; }
         .prompt-text {
-            font-size: 0.9em;
-            background: #f0f0f0;
-            padding: 8px;
-            border-radius: 4px;
+            font-size: 0.85rem;
+            background: rgba(0,0,0,0.03);
+            padding: 12px;
+            border-radius: 6px;
             white-space: pre-wrap;
-            font-family: Consolas, monospace;
+            font-family: 'Fira Code', monospace;
+            border: 1px solid var(--border);
         }
-        [data-theme="dark"] .prompt-text {
-            background: #1f1f1f;
-        }
+        [data-theme="dark"] .prompt-text { background: rgba(255,255,255,0.05); }
         button {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
+            padding: 10px 20px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 0.9em;
+            font-weight: 600;
+            transition: background 0.2s;
         }
-        button:hover { opacity: 0.9; }
-        button.secondary {
-            background: #95a5a6;
-        }
-        .form-group {
-            margin-bottom: 12px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
+        button:hover { background: var(--accent); }
+        button.secondary { background: #ef4444; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; }
         textarea, input[type="text"] {
             width: 100%;
-            padding: 8px;
+            padding: 12px;
             border: 1px solid var(--border);
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 0.9em;
-            background: var(--bg);
+            border-radius: 6px;
+            background: var(--card-bg);
             color: var(--text);
             box-sizing: border-box;
         }
-        textarea { min-height: 60px; resize: vertical; }
-        .row { display: flex; gap: 10px; }
-        .row > * { flex: 1; }
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
-            display: none;
-        }
-        .status.success { background: #d4edda; color: #155724; }
-        .status.error { background: #f8d7da; color: #721c24; }
-        .empty-hint {
-            color: #999;
-            font-style: italic;
-            padding: 20px;
-            text-align: center;
-        }
+        .status { padding: 12px; border-radius: 6px; margin-top: 15px; display: none; text-align: center; font-weight: 600; }
+        .status.success { background: #dcfce7; color: #166534; }
+        .status.error { background: #fee2e2; color: #991b1b; }
     </style>
 </head>
 <body>
