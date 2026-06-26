@@ -515,32 +515,34 @@ class Main(Star):
         user_id = event.get_sender_id()
 
         admin_only = self.config.get("admin_only_mode", False)
-        if admin_only and not event.is_admin():
-            yield event.plain_result("仅管理员可用")
-            return
-
-        if not event.is_private_chat():
-            group_id = event.message_obj.group_id
-            whitelist = self.config.get("group_whitelist", [])
-            if whitelist and group_id not in whitelist:
-                yield event.plain_result("该群不在白名单中")
-                return
-
-        session = None
-
-        admin_only = self.config.get("admin_only_mode", False)
-        is_trigger = False
 
         session = await self.store.get(key)
         if session and session.state == "waiting":
+            if admin_only and not event.is_admin():
+                return
             await self.store.transition_to_active(key, user_id)
             session = await self.store.get(key)
             logger.info("[脑控大师] waiting->active key=%s user=%s", key, user_id)
 
+        def check_group_whitelist() -> bool:
+            if not event.is_private_chat():
+                group_id = event.message_obj.group_id
+                whitelist = self.config.get("group_whitelist", [])
+                if whitelist and group_id not in whitelist:
+                    return False
+            return True
+
+        def check_admin() -> bool:
+            if admin_only and not event.is_admin():
+                return False
+            return True
+
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
         if msg in exit_kws:
-            is_trigger = True
-            if admin_only and not event.is_admin():
+            if not check_group_whitelist():
+                yield event.plain_result("该群不在白名单中")
+                return
+            if not check_admin():
                 yield event.plain_result("仅管理员可用")
                 return
             if session and session.state in ("active", "waiting"):
@@ -552,8 +554,10 @@ class Main(Star):
 
         extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
         if msg in extend_kws:
-            is_trigger = True
-            if admin_only and not event.is_admin():
+            if not check_group_whitelist():
+                yield event.plain_result("该群不在白名单中")
+                return
+            if not check_admin():
                 yield event.plain_result("仅管理员可用")
                 return
             if session and session.state == "active":
@@ -566,8 +570,10 @@ class Main(Star):
 
         enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
         if msg in enter_kws:
-            is_trigger = True
-            if admin_only and not event.is_admin():
+            if not check_group_whitelist():
+                yield event.plain_result("该群不在白名单中")
+                return
+            if not check_admin():
                 yield event.plain_result("仅管理员可用")
                 return
 
@@ -584,7 +590,7 @@ class Main(Star):
                 yield event.plain_result(result_msg)
                 return
 
-        # 普通消息且非触发词：不拦截，直接放行到 LLM
+        # 普通消息：如果已有激活会话则放行到 LLM（注入提示词）
         if session and session.state in ("active", "afterglow"):
             logger.info(
                 "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
