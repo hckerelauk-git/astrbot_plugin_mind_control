@@ -259,7 +259,9 @@ class SessionStore:
     async def set_cooldown(self, key: str, seconds: int) -> None:
         lock = await self._get_lock(key)
         async with lock:
-            self._cooldowns[key] = (time.time() + seconds, time.time() + seconds)
+            existing = self._cooldowns.get(key)
+            group_cd = existing[1] if existing else 0
+            self._cooldowns[key] = (time.time() + seconds, group_cd)
 
 
 # ======================== 预设模板模块 ========================
@@ -410,6 +412,10 @@ class Main(Star):
             logger.debug("[脑控大师] LLM钩子跳过 key=%s 无会话", key)
             return
         sensitivity = await self.store.get_sensitivity(key)
+        session = await self.store.get(key)
+        if not session:
+            logger.debug("[脑控大师] LLM钩子跳过 key=%s 会话已过期", key)
+            return
         mode = self.config.get("mode", "control")
         item_name = self.config.get("item_name", "特殊装置")
         custom_presets = self.config.get("custom_presets", [])
@@ -523,6 +529,11 @@ class Main(Star):
         enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
 
         if msg not in exit_kws and msg not in extend_kws and msg not in enter_kws:
+            if session and session.state == "waiting":
+                ok = await self.store.transition_to_active(key, user_id)
+                if ok:
+                    session = await self.store.get(key)
+                    logger.info("[脑控大师] waiting->active key=%s", key)
             if session and session.state in ("active", "afterglow"):
                 logger.info(
                     "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
@@ -565,6 +576,12 @@ class Main(Star):
             if cd_user > 0:
                 yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
                 return
+
+            if self.config.get("scope", "user") == "session":
+                cd_group = await self.store.check_cooldown_group(key)
+                if cd_group > 0:
+                    yield event.plain_result(f"群聊冷却中，请等待 {cd_group} 秒")
+                    return
 
             ok, result_msg = await self.store.activate(key, user_id)
             if ok:

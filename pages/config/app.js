@@ -46,7 +46,7 @@ async function loadCustomPresets() {
             html += `
                 <div class="preset-item">
                     <div class="preset-header">
-                        <div class="preset-name">${p.name}</div>
+                        <div class="preset-name">${escapeHtml(p.name)}</div>
                         <span class="preset-badge">自定义</span>
                     </div>
                     <div class="prompt-label">进入提示词</div>
@@ -56,7 +56,7 @@ async function loadCustomPresets() {
                     <div class="prompt-label">退出提示词</div>
                     <div class="prompt-text">${escapeHtml(p.exit || "(空)")}</div>
                     <div class="btn-group" style="margin-top:12px;">
-                        <button class="secondary" onclick="deletePreset('${p.name}')">删除</button>
+                        <button class="secondary" data-name="${escapeAttr(p.name)}" onclick="deletePreset(this.getAttribute('data-name'))">删除</button>
                     </div>
                 </div>
             `;
@@ -71,6 +71,10 @@ function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 async function addPreset() {
