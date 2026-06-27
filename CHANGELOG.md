@@ -1,6 +1,21 @@
 # 脑控大师 更新日志
 
-## [v2.6.0] - 2026-06-21
+## [v2.6.2] - 2026-06-27
+### 修复
+- 修复 `on_llm_request` 中 `get_sensitivity` 调用 `_cleanup_one` 可能改变 session 状态，导致注入错误阶段模板的问题
+- 修复 `transition_to_active` 方法从未被调用，`/mc_st` 远程启动后用户消息无法触发 waiting→active 转换
+- 修复 `message_handler` 中 enter 关键词缺少群聊冷却检查，可绕过群聊冷却
+- 修复 `set_cooldown` 同时覆盖用户和群聊冷却值的问题
+- 修复 `mc_status` / `mc_list` 中 `get_remaining`/`get_sensitivity` 后 session 状态可能过期的问题
+- 修复 `_remote_start` 缺少 `admin_only_mode` 权限检查
+- 修复 `_remote_start` 缺少 `group_whitelist` 群聊白名单检查
+- 修复 `_remote_start` 使用 `_get_key` 导致 scope=user 时 session 存储在用户级 key 下，其他用户无法触达
+- `message_handler` / `on_llm_request` / `mc_status` 增加 `umo` 回退查找，确保远程启动 session 在 scope=user 时也可达
+
+### 安全
+- 修复前端 `app.js` 预设名 XSS 风险：预设名使用 `escapeAttr` + `data-name` 属性替代裸拼接
+
+## [v2.6.1] - 2026-06-25
 ### 新增
 - 配置页 UI 全面现代化：暗色侧边栏 + 卡片布局 + 左侧导航
 - 自定义预设列表展示完整提示词预览，带 badge 和 hover 动效
