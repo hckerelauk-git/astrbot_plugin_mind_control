@@ -679,6 +679,10 @@ class Main(Star):
             return
         remaining = await self.store.get_remaining(key)
         sensitivity = await self.store.get_sensitivity(key)
+        session = await self.store.get(key)
+        if not session:
+            yield event.plain_result("当前没有沉浸状态")
+            return
         mode = self.config.get("mode", "control")
         mode_name = MODE_NAMES.get(mode, mode)
         state_names = {"waiting": "等待", "active": "激活", "afterglow": "余韵"}
@@ -703,6 +707,9 @@ class Main(Star):
         for key, session in all_sessions:
             remaining = await self.store.get_remaining(key)
             sens = await self.store.get_sensitivity(key)
+            session = await self.store.get(key)
+            if not session:
+                continue
             lines.append(f"  {session.user_id} | {state_names.get(session.state, '?')} | {remaining}秒 | 敏感度{sens}")
         yield event.plain_result("\n".join(lines))
 
