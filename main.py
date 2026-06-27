@@ -517,7 +517,6 @@ class Main(Star):
         if ok:
             eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
             logger.info(f"[脑控大师] {key} /控制指令激活，敏感度={eff}")
-            yield event.plain_result("")
         else:
             yield event.plain_result(result_msg)
 
