@@ -772,8 +772,12 @@ class Main(Star):
         item_name = self.config.get("item_name", "特殊装置")
         custom_presets = self.config.get("custom_presets", [])
         templates = get_templates(mode, item_name, self.config.get("sensitivity", 50), custom_presets)
+        is_custom = any(p.get("name") == mode for p in custom_presets)
         return jsonify({
             "mode": mode,
+            "sensitivity": self.config.get("sensitivity", 50),
+            "curve": self.config.get("curve", "flat"),
+            "is_custom": is_custom,
             "prompts": templates
         })
 
