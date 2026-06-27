@@ -407,7 +407,12 @@ class Main(Star):
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
         key = self._get_key(event)
+        umo = event.unified_msg_origin
         session = await self.store.get(key)
+        if not session:
+            session = await self.store.get(umo)
+            if session:
+                key = umo
         if not session:
             logger.debug("[脑控大师] LLM钩子跳过 key=%s 无会话", key)
             return
@@ -518,9 +523,14 @@ class Main(Star):
             return
         msg = event.message_str.strip()
         key = self._get_key(event)
+        umo = event.unified_msg_origin
         user_id = event.get_sender_id()
 
         session = await self.store.get(key)
+        if not session:
+            session = await self.store.get(umo)
+            if session:
+                key = umo
 
         # 非触发词消息：直接放行，不做任何拦截
         # 触发词才走下面的 keyword 分支
@@ -606,6 +616,16 @@ class Main(Star):
         if self.config.get("td_st_admin_only", False) and not event.is_admin():
             yield event.plain_result("此指令仅管理员可用")
             return
+        if self.config.get("admin_only_mode", False) and not event.is_admin():
+            yield event.plain_result("仅管理员可用")
+            return
+
+        if not event.is_private_chat():
+            group_id = event.message_obj.group_id
+            whitelist = self.config.get("group_whitelist", [])
+            if whitelist and group_id not in whitelist:
+                yield event.plain_result("该群不在白名单中")
+                return
 
         msg = event.message_str.strip()
         parts = msg.split()
@@ -618,22 +638,21 @@ class Main(Star):
                 yield event.plain_result("强度必须是 0-100 的整数喵~")
                 return
 
-        key = self._get_key(event)
         umo = event.unified_msg_origin
 
-        cd = await self.store.check_cooldown_user(key)
+        cd = await self.store.check_cooldown_user(umo)
         if cd > 0:
             yield event.plain_result(f"还在冷却中，请等待 {cd} 秒")
             return
 
-        ok, result_msg = await self.store.activate_remote(key, umo, sensitivity)
+        ok, result_msg = await self.store.activate_remote(umo, umo, sensitivity)
         if not ok:
             yield event.plain_result(result_msg)
             return
 
-        await self.store.set_cooldown(key, self.config.get("td_st_cooldown", 30))
+        await self.store.set_cooldown(umo, self.config.get("td_st_cooldown", 30))
         eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
-        logger.info(f"[脑控大师] {key} 远程启动成功，敏感度={eff}")
+        logger.info(f"[脑控大师] {umo} 远程启动成功，敏感度={eff}")
         yield event.plain_result(self.config.get("remote_msg") or "已进入远程模式，等待用户消息触发 LLM~")
 
     @filter.command("mc_st")
@@ -673,7 +692,12 @@ class Main(Star):
     @filter.command("mc_status")
     async def mc_status(self, event: AstrMessageEvent):
         key = self._get_key(event)
+        umo = event.unified_msg_origin
         session = await self.store.get(key)
+        if not session:
+            session = await self.store.get(umo)
+            if session:
+                key = umo
         if not session:
             yield event.plain_result("当前没有沉浸状态")
             return
