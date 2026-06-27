@@ -1,5 +1,12 @@
 # 脑控大师 更新日志
 
+## [v2.6.3] - 2026-06-27
+### 修复
+- 修复 `_remote_start` 缺少群聊冷却检查，可绕过群聊冷却
+- 修复 `transition_to_active` 不递增 `trigger_count`，远程启动会话触发次数始终为 0
+- 修复 scope=user 时冷却键不一致：`_remote_start` 用 `umo`、`/控制` 用 `umo:user_id`，导致两侧冷却互相不拦截
+- `/控制`、enter 关键词、`_remote_start` 的冷却检查均增加 `umo` 回退，统一冷却键
+
 ## [v2.6.2] - 2026-06-27
 ### 修复
 - 修复 `on_llm_request` 中 `get_sensitivity` 调用 `_cleanup_one` 可能改变 session 状态，导致注入错误阶段模板的问题
