@@ -517,34 +517,35 @@ class Main(Star):
         admin_only = self.config.get("admin_only_mode", False)
 
         session = await self.store.get(key)
-        if session and session.state == "waiting":
-            if admin_only and not event.is_admin():
-                return
-            await self.store.transition_to_active(key, user_id)
-            session = await self.store.get(key)
-            logger.info("[脑控大师] waiting->active key=%s user=%s", key, user_id)
 
-        def check_group_whitelist() -> bool:
-            if not event.is_private_chat():
-                group_id = event.message_obj.group_id
-                whitelist = self.config.get("group_whitelist", [])
-                if whitelist and group_id not in whitelist:
-                    return False
-            return True
-
-        def check_admin() -> bool:
-            if admin_only and not event.is_admin():
-                return False
-            return True
-
+        # 非触发词消息：直接放行，不做任何拦截
+        # 触发词才走下面的 keyword 分支
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
-        if msg in exit_kws:
-            if not check_group_whitelist():
+        extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
+        enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
+
+        if msg not in exit_kws and msg not in extend_kws and msg not in enter_kws:
+            if session and session.state in ("active", "afterglow"):
+                logger.info(
+                    "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
+                    key,
+                    session.state,
+                    self._preview(msg, 40),
+                )
+            return
+
+        # 以下仅处理触发词
+        if not event.is_private_chat():
+            group_id = event.message_obj.group_id
+            whitelist = self.config.get("group_whitelist", [])
+            if whitelist and group_id not in whitelist:
                 yield event.plain_result("该群不在白名单中")
                 return
-            if not check_admin():
-                yield event.plain_result("仅管理员可用")
-                return
+        if admin_only and not event.is_admin():
+            yield event.plain_result("仅管理员可用")
+            return
+
+        if msg in exit_kws:
             if session and session.state in ("active", "waiting"):
                 await self.store.deactivate(key)
                 logger.info("[脑控大师] 退出沉浸 key=%s -> afterglow，本条消息继续走 LLM", key)
@@ -552,14 +553,7 @@ class Main(Star):
             else:
                 logger.debug("[脑控大师] 退出词忽略 key=%s 无有效会话", key)
 
-        extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
-        if msg in extend_kws:
-            if not check_group_whitelist():
-                yield event.plain_result("该群不在白名单中")
-                return
-            if not check_admin():
-                yield event.plain_result("仅管理员可用")
-                return
+        elif msg in extend_kws:
             if session and session.state == "active":
                 ok, _ = await self.store.extend(key)
                 if ok:
@@ -568,15 +562,7 @@ class Main(Star):
                     logger.info("[脑控大师] 延长沉浸 key=%s 剩余=%ss", key, remaining)
             return
 
-        enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
-        if msg in enter_kws:
-            if not check_group_whitelist():
-                yield event.plain_result("该群不在白名单中")
-                return
-            if not check_admin():
-                yield event.plain_result("仅管理员可用")
-                return
-
+        elif msg in enter_kws:
             cd_user = await self.store.check_cooldown_user(key)
             if cd_user > 0:
                 yield event.plain_result(f"还在冷却中，请等待 {cd_user} 秒")
@@ -590,7 +576,6 @@ class Main(Star):
                 yield event.plain_result(result_msg)
                 return
 
-        # 普通消息：如果已有激活会话则放行到 LLM（注入提示词）
         if session and session.state in ("active", "afterglow"):
             logger.info(
                 "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
