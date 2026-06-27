@@ -514,8 +514,6 @@ class Main(Star):
         key = self._get_key(event)
         user_id = event.get_sender_id()
 
-        admin_only = self.config.get("admin_only_mode", False)
-
         session = await self.store.get(key)
 
         # 非触发词消息：直接放行，不做任何拦截
@@ -541,7 +539,7 @@ class Main(Star):
             if whitelist and group_id not in whitelist:
                 yield event.plain_result("该群不在白名单中")
                 return
-        if admin_only and not event.is_admin():
+        if self.config.get("admin_only_mode", False) and not event.is_admin():
             yield event.plain_result("仅管理员可用")
             return
 
