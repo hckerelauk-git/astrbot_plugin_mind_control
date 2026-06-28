@@ -1,6 +1,6 @@
 # ============================================================
-# 脑控大师 v2.6.3 - 多模式沉浸式互动插件
-# 支持：/mc_st远程启动 / /控制指定强度 / 5种预设模式
+# 脑控大师 v2.7.0 - 多模式沉浸式互动插件
+# 支持：/控制指定强度 / 5种预设模式 / 自定义预设
 # ============================================================
 
 from __future__ import annotations
@@ -31,8 +31,6 @@ class Session:
     end: float | None = None
     exit_ts: float | None = None
     trigger_count: int = 0
-    waiting_start: float | None = None
-    waiting_timeout: float | None = None
     custom_sensitivity: int | None = None
 
 
@@ -59,8 +57,6 @@ class SessionStore:
             end=s.end,
             exit_ts=s.exit_ts,
             trigger_count=s.trigger_count,
-            waiting_start=s.waiting_start,
-            waiting_timeout=s.waiting_timeout,
             custom_sensitivity=s.custom_sensitivity,
         )
 
@@ -69,13 +65,7 @@ class SessionStore:
         if not s:
             return
         now = time.time()
-        if s.state == "waiting":
-            timeout = s.waiting_timeout or self.cfg.get("waiting_timeout", 300)
-            if s.waiting_start and now - s.waiting_start > timeout:
-                self._data.pop(key, None)
-                self._cooldowns.pop(key, None)
-                # 不要 pop _locks，锁对象要一直保留避免 key 复用时锁分裂
-        elif s.state == "active":
+        if s.state == "active":
             if s.end is not None and s.end <= now:
                 s.state = "afterglow"
                 s.exit_ts = now
@@ -84,7 +74,6 @@ class SessionStore:
             if s.exit_ts and now - s.exit_ts > afterglow:
                 self._data.pop(key, None)
                 self._cooldowns.pop(key, None)
-                # 同样不删除锁对象
 
     def _calc_sensitivity(self, session: Session) -> int:
         base = session.custom_sensitivity if session.custom_sensitivity is not None else self.cfg.get("sensitivity", 50)
@@ -145,50 +134,11 @@ class SessionStore:
             self._cooldowns[key] = (now + cd_user, now + cd_group)
             return True, "ok"
 
-    async def activate_remote(self, key: str, umo: str, sensitivity: int | None = None) -> tuple[bool, str]:
-        lock = await self._get_lock(key)
-        async with lock:
-            now = time.time()
-            self._cleanup_one(key)
-            existing = self._data.get(key)
-            if existing and existing.state in ("active", "waiting"):
-                return False, "该会话已有活跃会话"
-
-            self._data[key] = Session(
-                state="waiting",
-                user_id="remote",
-                umo=umo,
-                waiting_start=now,
-                waiting_timeout=self.cfg.get("waiting_timeout", 300),
-                custom_sensitivity=sensitivity,
-            )
-            return True, "ok"
-
-    async def transition_to_active(self, key: str, user_id: str) -> bool:
-        lock = await self._get_lock(key)
-        async with lock:
-            s = self._data.get(key)
-            if not s or s.state != "waiting":
-                return False
-
-            now = time.time()
-            s.state = "active"
-            s.user_id = user_id
-            s.trigger_count += 1
-            if s.start is None:
-                s.start = now
-            s.end = now + self.cfg.get("state_duration", 180)
-            s.waiting_start = None
-            cd_user = self.cfg.get("cooldown_user", 30)
-            cd_group = self.cfg.get("cooldown_group", 60)
-            self._cooldowns[key] = (now + cd_user, now + cd_group)
-            return True
-
     async def deactivate(self, key: str) -> bool:
         lock = await self._get_lock(key)
         async with lock:
             s = self._data.get(key)
-            if not s or s.state not in ("active", "waiting"):
+            if not s or s.state != "active":
                 return False
             s.state = "afterglow"
             s.exit_ts = time.time()
@@ -223,9 +173,6 @@ class SessionStore:
             s = self._data.get(key)
             if not s:
                 return 0
-            if s.state == "waiting" and s.waiting_start:
-                timeout = s.waiting_timeout or self.cfg.get("waiting_timeout", 300)
-                return max(0, int(timeout - (time.time() - s.waiting_start)))
             if s.state == "active" and s.end is not None:
                 return max(0, int(s.end - time.time()))
             return 0
@@ -246,14 +193,11 @@ class SessionStore:
     async def clear_all(self) -> int:
         async with self._global_lock:
             keys = list(self._data.keys())
-        count = 0
-        for key in keys:
-            lock = await self._get_lock(key)
-            async with lock:
-                if self._data.pop(key, None) is not None:
-                    self._cooldowns.pop(key, None)
-                    count += 1
-        async with self._global_lock:
+            count = 0
+            for key in keys:
+                self._data.pop(key, None)
+                self._cooldowns.pop(key, None)
+                count += 1
             self._locks.clear()
         return count
 
@@ -396,6 +340,16 @@ class Main(Star):
         scope = self.config.get("scope", "user")
         return f"{umo}:{event.get_sender_id()}" if scope == "user" else umo
 
+    def _get_all_mode_keys(self) -> dict[str, str]:
+        """获取所有可用模式（内置 + 自定义）"""
+        modes = dict(MODE_NAMES)
+        custom_presets = self.config.get("custom_presets", [])
+        for p in custom_presets:
+            name = p.get("name", "")
+            if name and name not in modes:
+                modes[name] = name
+        return modes
+
     # ==================== LLM 钩子 ====================
 
     @staticmethod
@@ -492,7 +446,7 @@ class Main(Star):
             return
 
         if not event.is_private_chat():
-            group_id = event.message_obj.group_id
+            group_id = getattr(event.message_obj, "group_id", None)
             whitelist = self.config.get("group_whitelist", [])
             if whitelist and group_id not in whitelist:
                 yield event.plain_result("该群不在白名单中")
@@ -537,18 +491,11 @@ class Main(Star):
             if session:
                 key = umo
 
-        # 非触发词消息：直接放行，不做任何拦截
-        # 触发词才走下面的 keyword 分支
         exit_kws = self.config.get("exit_keywords", ["拿出来吧", "停止"])
         extend_kws = self.config.get("extend_keywords", ["继续", "再来", "more"])
         enter_kws = self.config.get("enter_keywords", ["我要控制你了"])
 
         if msg not in exit_kws and msg not in extend_kws and msg not in enter_kws:
-            if session and session.state == "waiting":
-                ok = await self.store.transition_to_active(key, user_id)
-                if ok:
-                    session = await self.store.get(key)
-                    logger.info("[脑控大师] waiting->active key=%s", key)
             if session and session.state in ("active", "afterglow"):
                 logger.info(
                     "[脑控大师] 沉浸中放行消息 key=%s state=%s msg=%s",
@@ -560,7 +507,7 @@ class Main(Star):
 
         # 以下仅处理触发词
         if not event.is_private_chat():
-            group_id = event.message_obj.group_id
+            group_id = getattr(event.message_obj, "group_id", None)
             whitelist = self.config.get("group_whitelist", [])
             if whitelist and group_id not in whitelist:
                 yield event.plain_result("该群不在白名单中")
@@ -570,7 +517,7 @@ class Main(Star):
             return
 
         if msg in exit_kws:
-            if session and session.state in ("active", "waiting"):
+            if session and session.state == "active":
                 await self.store.deactivate(key)
                 logger.info("[脑控大师] 退出沉浸 key=%s -> afterglow，本条消息继续走 LLM", key)
                 session = await self.store.get(key)
@@ -618,95 +565,25 @@ class Main(Star):
                 self._preview(msg, 40),
             )
 
-    # ==================== /mc_st 远程启动 ====================
-
-    async def _remote_start(self, event: AstrMessageEvent):
-        """远程启动，可选指定敏感度 /mc_st 或 /mc_st 50"""
-        if self.config.get("td_st_admin_only", False) and not event.is_admin():
-            yield event.plain_result("此指令仅管理员可用")
-            return
-        if self.config.get("admin_only_mode", False) and not event.is_admin():
-            yield event.plain_result("仅管理员可用")
-            return
-
-        if not event.is_private_chat():
-            group_id = event.message_obj.group_id
-            whitelist = self.config.get("group_whitelist", [])
-            if whitelist and group_id not in whitelist:
-                yield event.plain_result("该群不在白名单中")
-                return
-
-        msg = event.message_str.strip()
-        parts = msg.split()
-        sensitivity = None
-        if len(parts) > 1:
-            try:
-                sensitivity = int(parts[1])
-                sensitivity = max(0, min(100, sensitivity))
-            except ValueError:
-                yield event.plain_result("强度必须是 0-100 的整数喵~")
-                return
-
-        umo = event.unified_msg_origin
-        key = self._get_key(event)
-
-        cd = await self.store.check_cooldown_user(key)
-        if cd <= 0:
-            cd = await self.store.check_cooldown_user(umo)
-        if cd > 0:
-            yield event.plain_result(f"还在冷却中，请等待 {cd} 秒")
-            return
-
-        if self.config.get("scope", "user") == "session":
-            cd_group = await self.store.check_cooldown_group(key)
-            if cd_group <= 0:
-                cd_group = await self.store.check_cooldown_group(umo)
-            if cd_group > 0:
-                yield event.plain_result(f"群聊冷却中，请等待 {cd_group} 秒")
-                return
-
-        ok, result_msg = await self.store.activate_remote(umo, umo, sensitivity)
-        if not ok:
-            yield event.plain_result(result_msg)
-            return
-
-        await self.store.set_cooldown(umo, self.config.get("td_st_cooldown", 30))
-        eff = sensitivity if sensitivity is not None else self.config.get("sensitivity", 50)
-        logger.info(f"[脑控大师] {umo} 远程启动成功，敏感度={eff}")
-        yield event.plain_result(self.config.get("remote_msg") or "已进入远程模式，等待用户消息触发 LLM~")
-
-    @filter.command("mc_st")
-    async def mc_st(self, event: AstrMessageEvent):
-        async for result in self._remote_start(event):
-            yield result
-
-    @filter.command("td_st")
-    async def td_st(self, event: AstrMessageEvent):
-        async for result in self._remote_start(event):
-            yield result
-
-    @filter.command("tp_st")
-    async def tp_st(self, event: AstrMessageEvent):
-        async for result in self._remote_start(event):
-            yield result
-
     # ==================== 管理命令 ====================
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
         mode = self.config.get("mode", "control")
+        all_modes = self._get_all_mode_keys()
         lines = [
-            "【脑控大师 v2.6.3】", "",
+            "【脑控大师 v2.7.0】", "",
             "触发词：", "  进入：控制 / 我要控制你了", "  退出：拿出来吧 / 停止", "  延长：继续 / 再来", "",
-            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态", "  /mc_st - 远程启动（可指定敏感度）",
+            "指令：", "  /mc_help - 帮助", "  /mc_status - 状态",
             "  /mc_list - 所有会话（管理员）", "  /mc_clear - 清除会话（管理员）",
             "  /mc_mode [模式名] - 切换模式（管理员）", "",
             "强度控制：", "  /控制 或 /控制 50 -> 进入控制模式（默认/指定敏感度）", "",
-            f"当前模式：{MODE_NAMES.get(mode, mode)}",
-            f"可用模式：" + " / ".join(MODE_NAMES.values()),
+            f"当前模式：{all_modes.get(mode, mode)}",
+            f"可用模式：" + " / ".join(all_modes.values()),
         ]
-        if event.message_obj.group_id:
-            lines.append(f"\n当前群 ID：{event.message_obj.group_id}")
+        group_id = getattr(event.message_obj, "group_id", None)
+        if group_id:
+            lines.append(f"\n当前群 ID：{group_id}")
         yield event.plain_result("\n".join(lines))
 
     @filter.command("mc_status")
@@ -728,14 +605,13 @@ class Main(Star):
             yield event.plain_result("当前没有沉浸状态")
             return
         mode = self.config.get("mode", "control")
-        mode_name = MODE_NAMES.get(mode, mode)
-        state_names = {"waiting": "等待", "active": "激活", "afterglow": "余韵"}
+        all_modes = self._get_all_mode_keys()
+        mode_name = all_modes.get(mode, mode)
+        state_names = {"active": "激活", "afterglow": "余韵"}
         lines = [f"模式：{mode_name}", f"状态：{state_names.get(session.state, session.state)}"]
         if session.state == "active":
             lines.append(f"剩余：{remaining}秒")
             lines.append(f"敏感度：{sensitivity}")
-        elif session.state == "waiting":
-            lines.append(f"等待剩余：{remaining}秒")
         lines.append(f"触发：{session.trigger_count}次")
         yield event.plain_result("\n".join(lines))
 
@@ -746,7 +622,7 @@ class Main(Star):
         if not all_sessions:
             yield event.plain_result("当前没有会话")
             return
-        state_names = {"waiting": "等待", "active": "激活", "afterglow": "余韵"}
+        state_names = {"active": "激活", "afterglow": "余韵"}
         lines = [f"所有会话 ({len(all_sessions)} 个)："]
         for key, session in all_sessions:
             remaining = await self.store.get_remaining(key)
@@ -766,18 +642,19 @@ class Main(Star):
     @filter.command("mc_mode")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def mc_mode(self, event: AstrMessageEvent, mode_name: str = ""):
+        all_modes = self._get_all_mode_keys()
         if not mode_name:
-            current = MODE_NAMES.get(self.config.get("mode", "control"), self.config.get("mode", "control"))
-            yield event.plain_result(f"当前：{current}\n可用：{' / '.join(MODE_NAMES.values())}")
+            current = all_modes.get(self.config.get("mode", "control"), self.config.get("mode", "control"))
+            yield event.plain_result(f"当前：{current}\n可用：{' / '.join(all_modes.keys())}")
             return
-        if mode_name not in MODE_NAMES:
-            yield event.plain_result(f"未知模式，可用：{' / '.join(MODE_NAMES.keys())}")
+        if mode_name not in all_modes:
+            yield event.plain_result(f"未知模式，可用：{' / '.join(all_modes.keys())}")
             return
         self.config["mode"] = mode_name
         save = getattr(self.config, "save_config", None)
         if callable(save):
             save()
-        yield event.plain_result(f"已切换到【{MODE_NAMES[mode_name]}】模式")
+        yield event.plain_result(f"已切换到【{all_modes[mode_name]}】模式")
 
     # ==================== 清理 ====================
 
@@ -815,6 +692,8 @@ class Main(Star):
         name = data.get("name", "").strip()
         if not name:
             return jsonify({"error": "name required"}), 400
+        if name in PRESETS:
+            return jsonify({"error": f"名称 '{name}' 与内置模式冲突"}), 409
 
         custom_presets = self.config.get("custom_presets", [])
         custom_presets = [p for p in custom_presets if p.get("name") != name]
